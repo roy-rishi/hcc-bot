@@ -1,0 +1,23 @@
+{
+  "name": "hcc-verify",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/roy-rishi/hcc-verify#readme",
+  "bugs": {
+    "url": "https://github.com/roy-rishi/hcc-verify/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/roy-rishi/hcc-verify.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "wrangler": "^4.98.0"
+  }
+}
