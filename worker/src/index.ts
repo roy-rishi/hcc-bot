@@ -13,7 +13,7 @@
 
 // environment variable types (.env)
 export interface Env {
-    DISCORD_AUTH_URL: string;
+    // discord
     DISCORD_CLIENT_ID: string;
     DISCORD_CLIENT_SECRET: string;
 }
@@ -21,28 +21,31 @@ export interface Env {
 export default {
     async fetch(request, env, ctx): Promise<Response> {
         // parse incoming URL
-        const url = new URL(request.url);
-
+        const reqUrl = new URL(request.url);
+        const appOrigin = reqUrl.origin;
+        
         // GET /verify: Redirects to the Discord OAuth2.0 page.
-        if (url.pathname === "/verify" && request.method === "GET") {
-            return new Response(
-                `<!doctype html>
-                <html lang=en>
-                <head>
-                    <meta http-equiv="Refresh" content="0; URL=${env.DISCORD_AUTH_URL}" />
-                </head>
-                </html>`,
-                {
-                    headers: {
-                        "Content-Type": "text/html"
-                    }
-                }
+        if (reqUrl.pathname === "/verify" && request.method === "GET") {
+            // build redirect URL back to worker
+            const redirectUrl = new URL(appOrigin);
+            redirectUrl.pathname = "/callback/discord";
+
+            // build Discord auth URL
+            const authUrl = new URL("https://discord.com/oauth2/authorize");
+            authUrl.searchParams.append("client_id", env.DISCORD_CLIENT_ID);
+            authUrl.searchParams.append("response_type", "code");
+            authUrl.searchParams.append("redirect_uri", redirectUrl.toString());
+            authUrl.searchParams.append("scope", "identify");
+
+            return Response.redirect(
+                authUrl.toString(),
+                302
             );
         }
 
         // GET /callback/discord: The callback for Discord OAuth2.0.
         // Verifies Discord identity, then redirects to UW IdP.
-        if (url.pathname === "/callback/discord" && request.method === "GET") {
+        if (reqUrl.pathname === "/callback/discord" && request.method === "GET") {
             const reqUrl = new URL(request.url);
             const discordCode = reqUrl.searchParams.get("code");
 
@@ -53,13 +56,16 @@ export default {
                 });
             }
 
+            const redirectUrl = new URL(appOrigin);
+            redirectUrl.pathname = "/callback/discord";
+
             // build query parameter list
             const params = new URLSearchParams({
                 client_id: env.DISCORD_CLIENT_ID,
                 client_secret: env.DISCORD_CLIENT_SECRET,
                 grant_type: "authorization_code",
                 code: discordCode,  // the OAuth2.0 authorization code
-                redirect_uri: "http://localhost:8787/callback/discord"  // not shown to user
+                redirect_uri: decodeURIComponent(redirectUrl.toString())
             });
 
             // exchange authorization code for token
@@ -89,7 +95,7 @@ export default {
                 }
             }
 
-            // TODO: redirect to UW IdP
+            // TODO: get Discord username, db stuff, & redirect to UW IdP
             return new Response("Successfully proved Discord identity");
         }
 
