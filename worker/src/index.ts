@@ -16,6 +16,8 @@ export interface Env {
     // discord
     DISCORD_CLIENT_ID: string;
     DISCORD_CLIENT_SECRET: string;
+    // static files
+    ASSETS: Fetcher;
 }
 
 export default {
@@ -23,7 +25,7 @@ export default {
         // parse incoming URL
         const reqUrl = new URL(request.url);
         const appOrigin = reqUrl.origin;
-        
+
         // GET /verify: Redirects to the Discord OAuth2.0 page.
         if (reqUrl.pathname === "/verify" && request.method === "GET") {
             // build redirect URL back to worker
@@ -99,9 +101,16 @@ export default {
             return new Response("Successfully proved Discord identity");
         }
 
-        // Invalid path
-        return new Response("404 - This page can't be found. Unfortunate indeed, but not as infuriating as a missing bicycle 🙃", { status: 404, }
-        )
+        // Invalid path (404)
+        // get static html
+        const htmlUrl = new URL(appOrigin);
+        htmlUrl.pathname = "/404.html";
+        const htmlResponse = await env.ASSETS.fetch(htmlUrl);
+        // return static html with 404 status
+        return new Response(htmlResponse.body, {
+            status: 404,
+            headers: { "Content-Type": "text/html; charset=utf-8" }
+        });
 
     },
 } satisfies ExportedHandler<Env>;

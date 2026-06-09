@@ -1,0 +1,32 @@
+/* Encode Sans font */
+@import url('https://fonts.googleapis.com/css2?family=Encode+Sans:wght@100..900&display=swap');
+
+:root {
+    /* color variables */
+    --husky-purple: #32006F;
+    --spirit-purple: #4B2E84;
+    --husky-gold: #B7A57A;
+    --spirit-gold: #FFC704;
+    --heritage-gold: #86754D;
+    --accent-lavender: #C4B4E2;
+}
+
+html {
+    font-size: 18px;
+}
+
+body {
+    background-color: var(--spirit-purple);
+    font-family: "Encode Sans", sans-serif;
+    color: white;
+    text-align: center;
+}
+
+h1 {
+    font-size: 2rem;
+}
+
+h2 {
+    font-size: 1rem;
+    font-weight: 400;
+}
