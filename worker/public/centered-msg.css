@@ -1,0 +1,17 @@
+body {
+    text-align: center;
+}
+
+#column {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+#spacer {
+    flex-grow: 1;
+}
+
+#content {
+    flex-grow: 5;
+}

@@ -26,6 +26,7 @@ export default {
         const reqUrl = new URL(request.url);
         const appOrigin = reqUrl.origin;
         console.log(request.url);
+        console.log(appOrigin);
 
         // GET /verify: Redirects to the Discord OAuth2.0 page.
         if (reqUrl.pathname === "/verify" && request.method === "GET") {
@@ -54,7 +55,7 @@ export default {
 
             // return with error if authorization code null
             if (!discordCode) {
-                return new Response("Authorization code null", {
+                return new Response("Error: Authorization code null", {
                     status: 401
                 });
             }
@@ -85,19 +86,38 @@ export default {
             if (!tokenResponse.ok) {
                 // handle authentication error
                 if (tokenResponse.status == 400) {
-                    return new Response("Error: Could not authenticate with Discord", { status: 400 });
+                    // return static 401 html
+                    const htmlUrl = new URL(appOrigin);
+                    htmlUrl.pathname = "/401.html";
+                    const htmlResponse = await env.ASSETS.fetch(htmlUrl);
+
+                    return new Response(htmlResponse.body, {
+                        status: 401,
+                        headers: { "Content-Type": "text/html; charset=utf-8" }
+                    });
                 }
 
                 // a different error occured
                 else {
+                    // log error
                     const errorData = await tokenResponse.text();
                     console.error(tokenResponse.status)
                     console.error(errorData);
-                    return new Response("An unexpected error occured 😔", { status: 500 });
+
+                    
+                    // return static 500 html
+                    const htmlUrl = new URL(appOrigin);
+                    htmlUrl.pathname = "/500.html";
+                    const htmlResponse = await env.ASSETS.fetch(htmlUrl);
+
+                    return new Response(htmlResponse.body, {
+                        status: 500,
+                        headers: { "Content-Type": "text/html; charset=utf-8" }
+                    });
                 }
             }
 
-            // TODO: get Discord username, db stuff, & redirect to UW IdP
+            // TODO: add role
             return new Response("Successfully proved Discord identity");
         }
 
