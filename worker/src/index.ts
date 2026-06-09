@@ -25,6 +25,7 @@ export default {
         // parse incoming URL
         const reqUrl = new URL(request.url);
         const appOrigin = reqUrl.origin;
+        console.log(request.url);
 
         // GET /verify: Redirects to the Discord OAuth2.0 page.
         if (reqUrl.pathname === "/verify" && request.method === "GET") {
@@ -60,6 +61,7 @@ export default {
 
             const redirectUrl = new URL(appOrigin);
             redirectUrl.pathname = "/callback/discord";
+            console.log(redirectUrl.toString());
 
             // build query parameter list
             const params = new URLSearchParams({
@@ -67,17 +69,15 @@ export default {
                 client_secret: env.DISCORD_CLIENT_SECRET,
                 grant_type: "authorization_code",
                 code: discordCode,  // the OAuth2.0 authorization code
-                redirect_uri: decodeURIComponent(redirectUrl.toString())
+                redirect_uri: redirectUrl.toString()
             });
 
             // exchange authorization code for token
-            const credentials = btoa(`${env.DISCORD_CLIENT_ID}:${env.DISCORD_CLIENT_SECRET}`);
             const tokenResponse = await fetch("https://discord.com/api/v10/oauth2/token", {
                 method: "POST",
-                body: params,
+                body: params.toString(),
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",
-                    "Authorization": `Basic ${credentials}`
                 }
             });
 
