@@ -8,7 +8,13 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2026-06-05",
 	"observability": {
-		"enabled": true
+		"logs": {
+			"enabled": true,
+			"invocation_logs": true
+		},
+		"traces": {
+			"enabled": false
+		}
 	},
 	"upload_source_maps": true,
 	"compatibility_flags": [
@@ -25,7 +31,7 @@
 	"env": {
 		// development environment overrides
 		"dev": {
-			"routes": [],  // do not use custom domain
+			"routes": [], // do not use custom domain
 			"vars": {
 				"DISCORD_CLIENT_ID": "1512282809627185292"
 			}
