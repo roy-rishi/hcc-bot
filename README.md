@@ -1,2 +1,2 @@
 # hcc-verify
-Husky Cycling Club Discord server verification
+Automated Husky Cycling Club Discord server verification
