@@ -1,5 +1,7 @@
 /* index.ts: Cloudlfare Worker */
 const nacl = require("tweetnacl");
+import { Resend } from 'resend';
+
 
 // environment types (.env)
 export interface Env {
@@ -11,6 +13,7 @@ export interface Env {
     DISCORD_ROLE_ID: string;
     DISCORD_CHANNEL_ID: string;
     PUBLIC_KEY: string;
+    RESEND_KEY: string;
     // static files
     ASSETS: Fetcher;
 }
@@ -43,6 +46,7 @@ interface ModalSubmission {
 
 // endpoints
 const INTERACTIONS_PATH = "/interactions";
+const VERIFY_PATH="/verify";
 
 let redirectReq = function (originUrl: URL, path: "/401" | "/500" | "/404" | "/success"): Response {
     originUrl.pathname = path;
@@ -148,17 +152,35 @@ export default {
                     }
                 }
                 if (!netId || !name) {
-                    return new Response("Missing modal form values", {status: 401});
+                    return new Response("Missing modal form values", { status: 401 });
                 }
                 console.log({ userId, userName, netId, name });
 
-                // TODO: send email
+                // prepare email parameters
                 const emailAddress = `${netId}@uw.edu`;
+                const verifyUrl = new URL(appOrigin);
+                verifyUrl.pathname=VERIFY_PATH;
+                verifyUrl.searchParams.append("token", "test-token");
+
+                // send email
+                const resend = new Resend(env.RESEND_KEY);
+                const { data, error } = await resend.emails.send({
+                    to: [emailAddress],
+                    template: {
+                        id: "5e7f186c-796c-43be-a7e3-dcbe7567a5d4",
+                        variables: {
+                            link: verifyUrl.toString(),
+                            name: name,
+                        }
+                    }
+                });
+                console.log({data, error});
+                // TODO: error handling
 
                 return new Response(JSON.stringify({
                     type: 4,  // channel message
                     data: {
-                        content: `<@${userId}>, a verification email has been sent to **${emailAddress}**. It will expire in 10 minutes.`,
+                        content: `<@${userId}>, a verification link has been sent to **${emailAddress}**. It will expire in 10 minutes.`,
                         flags: (1 << 6)  // ephemeral
                     }
                 }), {
@@ -173,7 +195,6 @@ export default {
                 status: 500,
             });
         }
-
 
 
         // # Invalid path (404)
