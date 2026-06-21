@@ -19,6 +19,13 @@ interface Interaction {
     type: number;
 }
 
+interface Component {
+    component: {
+        custom_id: string;
+        value: string;
+    };
+}
+
 interface ModalSubmission {
     type: number;
     member: {
@@ -29,12 +36,7 @@ interface ModalSubmission {
     };
     data: {
         components: [
-            {
-                component: {
-                    custom_id: string;
-                    value: string;
-                };
-            }
+            Component
         ]
     };
 }
@@ -57,17 +59,15 @@ export default {
 
         // # Discord interactions endpoint
         if (reqUrl.pathname === INTERACTIONS_PATH && request.method === "POST") {
-            // get request signature
+            // verify request signature using public key
             const signature = request.headers.get("X-Signature-Ed25519");
             const timestamp = request.headers.get("X-Signature-Timestamp");
             if (!signature || !timestamp) {
                 return new Response("Missing request signature", { status: 401 });
             }
-
-            // verify signature using public key
-            const body = await request.text();
+            const bodyText = await request.text();
             const isVerified = nacl.sign.detached.verify(
-                Buffer.from(timestamp + body),
+                Buffer.from(timestamp + bodyText),
                 Buffer.from(signature, "hex"),
                 Buffer.from(env.PUBLIC_KEY, "hex")
             );
@@ -75,11 +75,11 @@ export default {
                 return new Response("Invalid request signature", { status: 401 })
             }
 
-            console.log(body);
-            const data = JSON.parse(body)
+            console.log(bodyText);
+            const body: Interaction = JSON.parse(bodyText);
 
-            // handle ping
-            if (data.type === 1) {
+            // ## handle ping
+            if (body.type === 1) {
                 return new Response(JSON.stringify({
                     type: 1
                 }), {
@@ -88,9 +88,10 @@ export default {
                 });
             }
 
-            // handle message component (button)
-            if (data.type === 3) {
+            // ## handle message component (button)
+            if (body.type === 3) {
                 // TODO: check which button was clicked
+                // return modal
                 const modalData = {
                     custom_id: "netIdModal",
                     title: "Verify with UW NetID",
@@ -128,15 +129,44 @@ export default {
             }
 
             // handle modal submission
-            if (data.type === 5) {
+            if (body.type === 5) {
                 // TODO: check which modal was submitted
+                const modalRes = body as ModalSubmission;
                 // get submission user info
-                const userId = data.member.user.id;
-                const userName = data.member.user.global_name;
+                const userId = modalRes.member.user.id;
+                const userName = modalRes.member.user.global_name;
 
                 // get form input
+                let netId: string | null = null;
+                let name: string | null = null;
+                for (let i = 0; i < modalRes.data.components.length; i++) {
+                    const comp = modalRes.data.components[i].component;
+                    if (comp.custom_id === "netId") {
+                        netId = comp.value.trim();
+                    } else if (comp.custom_id === "name") {
+                        name = comp.value.trim();
+                    }
+                }
+                if (!netId || !name) {
+                    return new Response("Missing modal form values", {status: 401});
+                }
+                console.log({ userId, userName, netId, name });
 
-                console.log({ userId, userName });
+                // TODO: send email
+                const emailAddress = `${netId}@uw.edu`;
+
+                return new Response(JSON.stringify({
+                    type: 4,  // channel message
+                    data: {
+                        content: `<@${userId}>, a verification email has been sent to **${emailAddress}**. It will expire in 10 minutes.`,
+                        flags: (1 << 6)  // ephemeral
+                    }
+                }), {
+                    status: 200, headers: {
+                        "User-Agent": `DiscordBot (${appOrigin}, 1.0.0)`,
+                        "Content-Type": "application/json"
+                    }
+                });
             }
 
             return new Response("Unhandled", {
