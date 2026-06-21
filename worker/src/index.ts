@@ -185,8 +185,7 @@ export default {
 
                 // prepare email parameters
                 const emailAddress = `${netId}@uw.edu`;
-                const verifyUrl = new URL(appOrigin);
-                verifyUrl.pathname=VERIFY_PATH;
+                const verifyUrl = new URL("https://www.huskycyclinguw.com/verify");
                 verifyUrl.searchParams.append("token", "test-token");
 
                 // send email
