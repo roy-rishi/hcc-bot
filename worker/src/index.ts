@@ -1,6 +1,7 @@
 /* index.ts: Cloudlfare Worker */
-const nacl = require("tweetnacl");
+import nacl from "tweetnacl";
 import { Resend } from 'resend';
+import nJwt from 'njwt'; // structural import
 
 
 // environment types (.env)
@@ -13,9 +14,16 @@ export interface Env {
     DISCORD_ROLE_ID: string;
     DISCORD_CHANNEL_ID: string;
     PUBLIC_KEY: string;
+    // resend
     RESEND_KEY: string;
+    // jwt
+    JWT_KEY: string;
     // static files
     ASSETS: Fetcher;
+}
+
+interface Token {
+    token: string;
 }
 
 interface Interaction {
@@ -46,13 +54,18 @@ interface ModalSubmission {
 
 // endpoints
 const INTERACTIONS_PATH = "/interactions";
-const VERIFY_PATH="/verify";
+const VERIFY_PATH = "/verify";
 
 let redirectReq = function (originUrl: URL, path: "/401" | "/500" | "/404" | "/success"): Response {
     originUrl.pathname = path;
     return Response.redirect(originUrl.toString(), 302);
 };
 
+let createJwt = function (payload: {}, expirationMins: number, signingKey: string): string {
+    const token = nJwt.create(payload, signingKey);
+    token.setExpiration(new Date(Date.now() + (expirationMins * 60 * 1000)));
+    return token.compact();
+}
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "https://www.huskycyclinguw.com",
@@ -81,6 +94,71 @@ export default {
 
         // # receive verification token and grant permissions
         if (reqUrl.pathname === VERIFY_PATH && request.method === "POST") {
+            // parse body for JWT token
+            const reqBodyStr = await request.text();
+            console.log(reqBodyStr);
+            const reqBody: Token = JSON.parse(reqBodyStr);
+            const jwtString = reqBody.token;
+            if (!jwtString) {
+                return new Response("Error: missing token", {
+                    status: 401, headers: corsHeaders
+                });
+            }
+
+            // validate JWT
+            let verifiedJwt: nJwt.Jwt | undefined;
+            try {
+                verifiedJwt = nJwt.verify(jwtString, env.JWT_KEY);
+            } catch (e) {
+                console.error(e);
+                return new Response("Could not validate token", {
+                    status: 401, headers: corsHeaders
+                });
+            }
+            if (!verifiedJwt) {
+                return new Response("Could not validate token", {
+                    status: 401, headers: corsHeaders
+                });
+            }
+
+            // parse JWT payload
+            const jwtBody = verifiedJwt.body.toJSON();
+            console.log(jwtBody);
+            const discordId = jwtBody.discordId;
+            const name = jwtBody.name;
+
+            // add Discord role
+            const roleRes = await fetch(
+                `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${discordId}/roles/${env.DISCORD_ROLE_ID}`, {
+                method: "PUT",
+                headers: {
+                    "Authorization": `Bot ${env.DISCORD_BOT_TOKEN}`,
+                    "User-Agent": `DiscordBot (${appOrigin}, 1.0.0)`,
+                    "Content-Type": "application/json"
+                }
+            });
+            if (!roleRes.ok) {
+                console.error(await roleRes.text());
+            }
+
+            // send confirmation message
+            const msgRes = await fetch(
+                `https://discord.com/api/v10/channels/${env.DISCORD_CHANNEL_ID}/messages`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bot ${env.DISCORD_BOT_TOKEN}`,
+                    "User-Agent": `DiscordBot (${appOrigin}, 1.0.0)`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    content: `You're verified, <@${discordId}>!`
+                })
+            });
+            if (!msgRes.ok) {
+                console.error(await roleRes.text());
+            }
+
+
             return new Response(null, {
                 status: 204,
                 headers: corsHeaders
@@ -159,7 +237,7 @@ export default {
                 });
             }
 
-            // handle modal submission
+            // ## handle modal submission
             if (body.type === 5) {
                 // TODO: check which modal was submitted
                 const modalRes = body as ModalSubmission;
@@ -186,7 +264,14 @@ export default {
                 // prepare email parameters
                 const emailAddress = `${netId}@uw.edu`;
                 const verifyUrl = new URL("https://www.huskycyclinguw.com/verify");
-                verifyUrl.searchParams.append("token", "test-token");
+                const token = createJwt({
+                    name: name,
+                    discordId: userId,
+                },
+                    10,  // 10 min expiration
+                    env.JWT_KEY  // signing key
+                );
+                verifyUrl.searchParams.append("token", token);
 
                 // send email
                 const resend = new Resend(env.RESEND_KEY);
@@ -200,8 +285,7 @@ export default {
                         }
                     }
                 });
-                console.log({data, error});
-                // TODO: error handling
+                console.log({ data, error });
 
                 return new Response(JSON.stringify({
                     type: 4,  // channel message
