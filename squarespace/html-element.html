@@ -1,0 +1,34 @@
+<div id="btnContainer">
+  <button id="verifyBtn">Verify Me</button>
+</div>
+
+<script>
+document.getElementById("verifyBtn").addEventListener("click", () => {
+  // get token from URL query parameters
+  const token = new URLSearchParams(window.location.search).get("token");
+  if (!token)
+    return alert("Missing token");
+
+  // POST token to worker for validation
+  fetch("https://hcc.rishiroy.com/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token })
+  })
+  .then(res => alert(res.ok ? "Success!" : "Failed"));
+});
+</script>
+
+<style>
+  #verifyBtn {
+    background-color: black;
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 12px 20px 12px 20px;
+  }
+
+  #btnContainer {
+    text-align: center;
+  }
+</style>

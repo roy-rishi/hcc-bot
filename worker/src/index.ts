@@ -54,12 +54,39 @@ let redirectReq = function (originUrl: URL, path: "/401" | "/500" | "/404" | "/s
 };
 
 
+const corsHeaders = {
+    "Access-Control-Allow-Origin": "https://www.huskycyclinguw.com",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
+};
+
+
 export default {
     async fetch(request, env, ctx): Promise<Response> {
         // parse request URL
         const reqUrl = new URL(request.url);
         const appOrigin = reqUrl.origin;
         console.log(request.url);
+
+
+        // # handle browser pre-flight CORS check
+        if (request.method === "OPTIONS") {
+            return new Response(null, {
+                status: 204,
+                headers: corsHeaders,
+            });
+        }
+
+
+        // # receive verification token and grant permissions
+        if (reqUrl.pathname === VERIFY_PATH && request.method === "POST") {
+            return new Response(null, {
+                status: 204,
+                headers: corsHeaders
+            });
+        }
+
 
         // # Discord interactions endpoint
         if (reqUrl.pathname === INTERACTIONS_PATH && request.method === "POST") {
