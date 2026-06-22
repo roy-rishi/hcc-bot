@@ -1,2 +1,2 @@
 # hcc-bot
-Automated Husky Cycling Club Discord server verification
+Documentation coming soon...
