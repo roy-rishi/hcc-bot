@@ -102,15 +102,13 @@ export default {
         // # receive verification JWT and grant permissions
         if (reqUrl.pathname === VERIFY_PATH && request.method === "POST") {
             // parse request body for JWT
-            let jwtStr: string | null;
+            let jwtStr: string;
             try {
                 const reqBody: TokenSchema = new TokenSchema(JSON.parse(reqBodyStr));
                 jwtStr = reqBody.token;
             } catch (e) {
                 console.error(e);
-                return new Response(`Error: Could not parse request body; ${e}`, {
-                    status: 401, headers: corsHeaders
-                });
+                return new Response(`Error: Could not parse request body; ${e}`, { status: 401, headers: corsHeaders });
             }
 
             // validate JWT
@@ -121,9 +119,7 @@ export default {
                     throw new Error("Invalid JWT");
             } catch (e) {
                 console.error(e);
-                return new Response(`Error: ${e}`, {
-                    status: 401, headers: corsHeaders
-                });
+                return new Response(`Error: ${e}`, { status: 401, headers: corsHeaders });
             }
 
             // parse JWT payload
@@ -135,9 +131,7 @@ export default {
                 name = jwtBody.name;
             } catch (e) {
                 console.error(e);
-                return new Response(`Error: Could not parse JWT payload; ${e}`, {
-                    status: 401, headers: corsHeaders
-                });
+                return new Response(`Error: Could not parse JWT payload; ${e}`, { status: 401, headers: corsHeaders });
             }
 
             // add Discord role
@@ -153,9 +147,7 @@ export default {
             if (!addRoleRes.ok) {
                 const resStr = await addRoleRes.text();
                 console.error(resStr);
-                return new Response(`Error: Could not add role; ${resStr}`, {
-                    status: 400, headers: corsHeaders
-                });
+                return new Response(`Error: Could not add role; ${resStr}`, { status: 400, headers: corsHeaders });
             }
 
             // send confirmation message
@@ -171,15 +163,12 @@ export default {
                     content: `You're verified, <@${discordId}>!`
                 })
             });
-            if (!sendMsgRes.ok) {
+            if (!sendMsgRes.ok)
                 console.error(await addRoleRes.text());
-            }
 
 
-            return new Response(null, {
-                status: 204,
-                headers: corsHeaders
-            });
+            // return success
+            return new Response(null, { status: 204, headers: corsHeaders });
         }
 
 
@@ -197,9 +186,8 @@ export default {
                 Buffer.from(signature, "hex"),
                 Buffer.from(env.PUBLIC_KEY, "hex")
             );
-            if (!isVerified) {
+            if (!isVerified)
                 return new Response("Invalid request signature", { status: 401 })
-            }
 
             console.log(bodyText);
             const body: Interaction = JSON.parse(bodyText);
@@ -273,9 +261,8 @@ export default {
                         name = comp.value.trim();
                     }
                 }
-                if (!netId || !name) {
+                if (!netId || !name)
                     return new Response("Missing modal form values", { status: 401 });
-                }
                 console.log({ userId, userName, netId, name });
 
                 // prepare email parameters
@@ -318,13 +305,12 @@ export default {
                 });
             }
 
-            return new Response("Unhandled", {
-                status: 500,
-            });
+            // ## disregard other interaction types
+            return new Response("Unhandled", { status: 500, });
         }
 
 
-        // # Invalid path (404)
+        // # invalid path (404)
         const htmlUrl = new URL(appOrigin);
         htmlUrl.pathname = "/404.html";
         const htmlResponse = await env.ASSETS.fetch(htmlUrl);
@@ -332,6 +318,5 @@ export default {
             status: 404,
             headers: { "Content-Type": "text/html; charset=utf-8" }
         });
-
     },
 } satisfies ExportedHandler<Env>;
