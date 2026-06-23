@@ -14,7 +14,8 @@ export interface Env {
     DISCORD_BOT_TOKEN: string;
     DISCORD_GUILD_ID: string;
     DISCORD_ROLE_ID: string;
-    DISCORD_CHANNEL_ID: string;
+    DISCORD_LOGS_CHANNEL_ID: string;
+    DISCORD_ANNOUNCEMENT_CHANNEL_ID: string;
     PUBLIC_KEY: string;
     // resend
     RESEND_KEY: string;
@@ -151,7 +152,7 @@ export default {
 
             // send confirmation message (use comments to send ephemerally using prior interaction token)
             const sendMsgRes = await fetch(
-                `https://discord.com/api/v10/channels/${env.DISCORD_CHANNEL_ID}/messages`, {
+                `https://discord.com/api/v10/channels/${env.DISCORD_LOGS_CHANNEL_ID}/messages`, {
                 // `https://discord.com/api/v10/webhooks/${env.DISCORD_CLIENT_ID}/${interactionToken}`, {
                 method: "POST",
                 headers: {
