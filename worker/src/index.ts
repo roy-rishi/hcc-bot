@@ -2,10 +2,11 @@
 import nacl from "tweetnacl";
 import { Resend } from 'resend';
 import nJwt from 'njwt';
-import { JSONObject, required } from 'ts-json-object';
+import * as schema from './schemas';
+import { int } from "zod";
 
 
-// environment types (.env)
+// environment types
 export interface Env {
     // discord
     DISCORD_CLIENT_ID: string;
@@ -21,44 +22,6 @@ export interface Env {
     JWT_KEY: string;
     // static files
     ASSETS: Fetcher;
-}
-
-class TokenSchema extends JSONObject {
-    @required
-    token!: string;
-}
-
-class JwtSchema extends JSONObject {
-    @required
-    discordId!: string;
-    @required
-    name!: string;
-}
-
-interface Interaction {
-    type: number;
-}
-
-interface Component {
-    component: {
-        custom_id: string;
-        value: string;
-    };
-}
-
-interface ModalSubmission {
-    type: number;
-    member: {
-        user: {
-            id: string;
-            global_name: string;
-        };
-    };
-    data: {
-        components: [
-            Component
-        ]
-    };
 }
 
 // endpoints
@@ -84,10 +47,14 @@ export default {
         // parse request URL
         const reqUrl = new URL(request.url);
         const appOrigin = reqUrl.origin;
-        console.log(request.url);
         // get request body
-        const reqBodyStr = await request.text();
-        console.log(reqBodyStr);
+        const reqBodyRaw = await request.text();
+        console.log(reqBodyRaw);
+
+        const discordHeaders = {
+            "User-Agent": `DiscordBot (${appOrigin}, 1.0.0)`,
+            "Content-Type": "application/json"
+        };
 
 
         // # handle browser pre-flight CORS check
@@ -104,7 +71,7 @@ export default {
             // parse request body for JWT
             let jwtStr: string;
             try {
-                const reqBody: TokenSchema = new TokenSchema(JSON.parse(reqBodyStr));
+                const reqBody = schema.Token.parse(JSON.parse(reqBodyRaw));
                 jwtStr = reqBody.token;
             } catch (e) {
                 console.error(e);
@@ -125,10 +92,12 @@ export default {
             // parse JWT payload
             let discordId: string;
             let name: string;
+            let interactionToken: string;
             try {
-                const jwtBody: JwtSchema = new JwtSchema(verifiedJwt.body);
-                discordId = jwtBody.discordId;
-                name = jwtBody.name;
+                const jwtPayload = schema.JwtPayload.parse(verifiedJwt.body);
+                discordId = jwtPayload.discordId;
+                name = jwtPayload.name;
+                interactionToken = jwtPayload.interactionToken;
             } catch (e) {
                 console.error(e);
                 return new Response(`Error: Could not parse JWT payload; ${e}`, { status: 401, headers: corsHeaders });
@@ -140,8 +109,7 @@ export default {
                 method: "PUT",
                 headers: {
                     "Authorization": `Bot ${env.DISCORD_BOT_TOKEN}`,
-                    "User-Agent": `DiscordBot (${appOrigin}, 1.0.0)`,
-                    "Content-Type": "application/json"
+                    ...discordHeaders,
                 }
             });
             if (!addRoleRes.ok) {
@@ -150,21 +118,22 @@ export default {
                 return new Response(`Error: Could not add role; ${resStr}`, { status: 400, headers: corsHeaders });
             }
 
-            // send confirmation message
+            // send confirmation message (use comments to send ephemerally using prior interaction token)
             const sendMsgRes = await fetch(
                 `https://discord.com/api/v10/channels/${env.DISCORD_CHANNEL_ID}/messages`, {
+                // `https://discord.com/api/v10/webhooks/${env.DISCORD_CLIENT_ID}/${interactionToken}`, {
                 method: "POST",
                 headers: {
                     "Authorization": `Bot ${env.DISCORD_BOT_TOKEN}`,
-                    "User-Agent": `DiscordBot (${appOrigin}, 1.0.0)`,
-                    "Content-Type": "application/json"
+                    ...discordHeaders,
                 },
                 body: JSON.stringify({
-                    content: `You're verified, <@${discordId}>!`
+                    content: `You're verified, <@${discordId}>!`,
+                    // flags: (1 << 6)  // ephemeral TEST TEST
                 })
             });
             if (!sendMsgRes.ok)
-                console.error(await addRoleRes.text());
+                console.error(await sendMsgRes.text());
 
 
             // return success
@@ -174,103 +143,120 @@ export default {
 
         // # Discord interactions endpoint
         if (reqUrl.pathname === INTERACTIONS_PATH && request.method === "POST") {
-            // verify request signature using public key
+            // get request signature
             const signature = request.headers.get("X-Signature-Ed25519");
             const timestamp = request.headers.get("X-Signature-Timestamp");
-            if (!signature || !timestamp) {
+            if (!signature || !timestamp)
                 return new Response("Missing request signature", { status: 401 });
-            }
-            const bodyText = await request.text();
+
+            // verify request signature
             const isVerified = nacl.sign.detached.verify(
-                Buffer.from(timestamp + bodyText),
+                Buffer.from(timestamp + reqBodyRaw),
                 Buffer.from(signature, "hex"),
                 Buffer.from(env.PUBLIC_KEY, "hex")
             );
             if (!isVerified)
                 return new Response("Invalid request signature", { status: 401 })
 
-            console.log(bodyText);
-            const body: Interaction = JSON.parse(bodyText);
-
-            // ## handle ping
-            if (body.type === 1) {
-                return new Response(JSON.stringify({
-                    type: 1
-                }), {
-                    status: 200,
-                    headers: { "Content-Type": "application/json" }
-                });
+            // get interaction type code
+            let interactionType: number;
+            try {
+                const body = schema.Interaction.parse(JSON.parse(reqBodyRaw));
+                interactionType = body.type;
+            } catch (e) {
+                console.error(e);
+                return new Response(`Error: Could not parse interaction for attribute 'type'; ${e}`, { status: 400 });
             }
 
-            // ## handle message component (button)
-            if (body.type === 3) {
+            // ## handle ping
+            if (interactionType === 1) {
+                return new Response(
+                    JSON.stringify({ type: 1 }),
+                    { status: 200, headers: discordHeaders, }
+                );
+            }
+
+            // ## handle message component (button press)
+            if (interactionType === 3) {
                 // TODO: check which button was clicked
-                // return modal
+
+                // construct modal (popup)
                 const modalData = {
                     custom_id: "netIdModal",
                     title: "Verify with UW NetID",
-                    components: [{
-                        type: 18,  // label
-                        label: "What is your NetID?",
-                        description: "This is the portion before '@uw.edu' in your email address",
-                        component: {
-                            type: 4,  // text input
-                            custom_id: "netId",
-                            style: 1,  // short
-                            placeholder: "NetID"
+                    components: [
+                        {
+                            type: 18,  // label
+                            label: "What is your NetID?",
+                            description: "This is the portion before '@uw.edu' in your email address",
+                            component: {
+                                type: 4,  // text input
+                                custom_id: "netId",
+                                style: 1,  // short
+                                placeholder: "NetID"
+                            }
+                        }, {
+                            type: 18,  // label
+                            label: "What is your full name?",
+                            description: "You may enter a preferred name",
+                            component: {
+                                type: 4,  // text input
+                                custom_id: "name",
+                                style: 1,  // short
+                                placeholder: "Dubs II"
+                            }
                         }
-                    }, {
-                        type: 18,  // label
-                        label: "What is your full name?",
-                        description: "You may enter a preferred name",
-                        component: {
-                            type: 4,  // text input
-                            custom_id: "name",
-                            style: 1,  // short
-                            placeholder: "Dubs II"
-                        }
-                    }]
+                    ]
                 };
-                return new Response(JSON.stringify({
-                    type: 9,  // modal
-                    data: modalData
-                }), {
-                    status: 200, headers: {
-                        "User-Agent": `DiscordBot (${appOrigin}, 1.0.0)`,
-                        "Content-Type": "application/json"
-                    }
-                });
+
+                // return modal
+                return new Response(
+                    JSON.stringify({
+                        type: 9,  // modal
+                        data: modalData
+                    }), { status: 200, headers: discordHeaders });
             }
 
-            // ## handle modal submission
-            if (body.type === 5) {
+            // ## handle modal (form) submission
+            if (interactionType === 5) {
                 // TODO: check which modal was submitted
-                const modalRes = body as ModalSubmission;
-                // get submission user info
-                const userId = modalRes.member.user.id;
-                const userName = modalRes.member.user.global_name;
 
-                // get form input
-                let netId: string | null = null;
-                let name: string | null = null;
-                for (let i = 0; i < modalRes.data.components.length; i++) {
-                    const comp = modalRes.data.components[i].component;
-                    if (comp.custom_id === "netId") {
-                        netId = comp.value.trim();
-                    } else if (comp.custom_id === "name") {
-                        name = comp.value.trim();
+                // parse submission
+                let submission: schema.ModalSubmissionInteraction;
+                try {
+                    submission = schema.ModalSubmissionInteraction.parse(JSON.parse(reqBodyRaw));
+                } catch (e) {
+                    console.error(e);
+                    return new Response(`Error: Could not parse modal submission; ${e}`, { status: 400 });
+                }
+
+                // get submitter's Discord id
+                const discordId = submission.member.user.id;
+                // get token (to identify this interaction and respond later)
+                const interactionToken = submission.token;
+
+                // get form submission values from components array, and validate their existence
+                let netId: string | undefined;
+                let name: string | undefined;
+                for (let i = 0; i < submission.data.components.length; i++) {
+                    const component = submission.data.components[i].component;
+                    if (component.custom_id === "netId") {
+                        netId = component.value.trim();
+                    } else if (component.custom_id === "name") {
+                        name = component.value.trim();
                     }
                 }
                 if (!netId || !name)
-                    return new Response("Missing modal form values", { status: 401 });
-                console.log({ userId, userName, netId, name });
+                    return new Response("Missing modal form values", { status: 400 });
+                console.log({ netId, name, discordId });
 
-                // prepare email parameters
+                // email parameters
                 const emailAddress = `${netId}@uw.edu`;
                 const verifyUrl = new URL("https://www.huskycyclinguw.com/verify");
                 const token = createJwt({
                     name: name,
-                    discordId: userId,
+                    discordId: discordId,
+                    interactionToken: interactionToken
                 },
                     10,  // 10 min expiration
                     env.JWT_KEY  // signing key
@@ -291,18 +277,16 @@ export default {
                 });
                 console.log({ data, error });
 
-                return new Response(JSON.stringify({
-                    type: 4,  // channel message
-                    data: {
-                        content: `<@${userId}>, a verification link has been sent to **${emailAddress}**. It will expire in 10 minutes.`,
-                        flags: (1 << 6)  // ephemeral
-                    }
-                }), {
-                    status: 200, headers: {
-                        "User-Agent": `DiscordBot (${appOrigin}, 1.0.0)`,
-                        "Content-Type": "application/json"
-                    }
-                });
+                return new Response(
+                    JSON.stringify({
+                        type: 4,  // channel message
+                        data: {
+                            content: `<@${discordId}>, a verification link has been sent to **${emailAddress}**. It will expire in 10 minutes.`,
+                            flags: (1 << 6)  // ephemeral
+                        }
+                    }),
+                    { status: 200, headers: discordHeaders }
+                );
             }
 
             // ## disregard other interaction types
