@@ -1,7 +1,8 @@
 /* index.ts: Cloudlfare Worker */
 import nacl from "tweetnacl";
 import { Resend } from 'resend';
-import nJwt from 'njwt'; // structural import
+import nJwt from 'njwt';
+import { JSONObject, required } from 'ts-json-object';
 
 
 // environment types (.env)
@@ -22,8 +23,16 @@ export interface Env {
     ASSETS: Fetcher;
 }
 
-interface Token {
-    token: string;
+class TokenSchema extends JSONObject {
+    @required
+    token!: string;
+}
+
+class JwtSchema extends JSONObject {
+    @required
+    discordId!: string;
+    @required
+    name!: string;
 }
 
 interface Interaction {
@@ -56,11 +65,6 @@ interface ModalSubmission {
 const INTERACTIONS_PATH = "/interactions";
 const VERIFY_PATH = "/verify";
 
-let redirectReq = function (originUrl: URL, path: "/401" | "/500" | "/404" | "/success"): Response {
-    originUrl.pathname = path;
-    return Response.redirect(originUrl.toString(), 302);
-};
-
 let createJwt = function (payload: {}, expirationMins: number, signingKey: string): string {
     const token = nJwt.create(payload, signingKey);
     token.setExpiration(new Date(Date.now() + (expirationMins * 60 * 1000)));
@@ -81,6 +85,9 @@ export default {
         const reqUrl = new URL(request.url);
         const appOrigin = reqUrl.origin;
         console.log(request.url);
+        // get request body
+        const reqBodyStr = await request.text();
+        console.log(reqBodyStr);
 
 
         // # handle browser pre-flight CORS check
@@ -92,15 +99,16 @@ export default {
         }
 
 
-        // # receive verification token and grant permissions
+        // # receive verification JWT and grant permissions
         if (reqUrl.pathname === VERIFY_PATH && request.method === "POST") {
-            // parse body for JWT token
-            const reqBodyStr = await request.text();
-            console.log(reqBodyStr);
-            const reqBody: Token = JSON.parse(reqBodyStr);
-            const jwtString = reqBody.token;
-            if (!jwtString) {
-                return new Response("Error: missing token", {
+            // parse request body for JWT
+            let jwtStr: string | null;
+            try {
+                const reqBody: TokenSchema = new TokenSchema(JSON.parse(reqBodyStr));
+                jwtStr = reqBody.token;
+            } catch (e) {
+                console.error(e);
+                return new Response(`Error: Could not parse request body; ${e}`, {
                     status: 401, headers: corsHeaders
                 });
             }
@@ -108,27 +116,32 @@ export default {
             // validate JWT
             let verifiedJwt: nJwt.Jwt | undefined;
             try {
-                verifiedJwt = nJwt.verify(jwtString, env.JWT_KEY);
+                verifiedJwt = nJwt.verify(jwtStr, env.JWT_KEY);
+                if (!verifiedJwt)
+                    throw new Error("Invalid JWT");
             } catch (e) {
                 console.error(e);
-                return new Response("Could not validate token", {
-                    status: 401, headers: corsHeaders
-                });
-            }
-            if (!verifiedJwt) {
-                return new Response("Could not validate token", {
+                return new Response(`Error: ${e}`, {
                     status: 401, headers: corsHeaders
                 });
             }
 
             // parse JWT payload
-            const jwtBody = verifiedJwt.body.toJSON();
-            console.log(jwtBody);
-            const discordId = jwtBody.discordId;
-            const name = jwtBody.name;
+            let discordId: string;
+            let name: string;
+            try {
+                const jwtBody: JwtSchema = new JwtSchema(verifiedJwt.body);
+                discordId = jwtBody.discordId;
+                name = jwtBody.name;
+            } catch (e) {
+                console.error(e);
+                return new Response(`Error: Could not parse JWT payload; ${e}`, {
+                    status: 401, headers: corsHeaders
+                });
+            }
 
             // add Discord role
-            const roleRes = await fetch(
+            const addRoleRes = await fetch(
                 `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${discordId}/roles/${env.DISCORD_ROLE_ID}`, {
                 method: "PUT",
                 headers: {
@@ -137,12 +150,16 @@ export default {
                     "Content-Type": "application/json"
                 }
             });
-            if (!roleRes.ok) {
-                console.error(await roleRes.text());
+            if (!addRoleRes.ok) {
+                const resStr = await addRoleRes.text();
+                console.error(resStr);
+                return new Response(`Error: Could not add role; ${resStr}`, {
+                    status: 400, headers: corsHeaders
+                });
             }
 
             // send confirmation message
-            const msgRes = await fetch(
+            const sendMsgRes = await fetch(
                 `https://discord.com/api/v10/channels/${env.DISCORD_CHANNEL_ID}/messages`, {
                 method: "POST",
                 headers: {
@@ -154,8 +171,8 @@ export default {
                     content: `You're verified, <@${discordId}>!`
                 })
             });
-            if (!msgRes.ok) {
-                console.error(await roleRes.text());
+            if (!sendMsgRes.ok) {
+                console.error(await addRoleRes.text());
             }
 
 
