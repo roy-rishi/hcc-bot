@@ -74,13 +74,12 @@ export default {
             try {
                 bounceData = schema.EmailBounced.parse(JSON.parse(reqBodyRaw));
             } catch (e) {
-                return new Response(`Error: Could not parse request; ${e}`, { status: 400});
+                return new Response(`Error: Could not parse request; ${e}`, { status: 400 });
             }
             console.error(`Email with ID ${bounceData.data.email_id} to address(es) ${bounceData.data.to} bounced. Error: ${bounceData.data.bounce.message}`);
 
-            return new Response(null, { status: 200});
+            return new Response(null, { status: 200 });
         }
-
 
 
         // # receive verification JWT and grant permissions
@@ -134,6 +133,21 @@ export default {
                 console.error(resStr);
                 return new Response(`Error: Could not add role; ${resStr}`, { status: 400, headers: corsHeaders });
             }
+
+            // edit server nickname
+            const editNickRes = await fetch(
+                `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${discordId}`, {
+                method: "PATCH",
+                headers: {
+                    "Authorization": `Bot ${env.DISCORD_BOT_TOKEN}`,
+                    ...discordHeaders,
+                },
+                body: JSON.stringify({
+                    nick: name
+                })
+            });
+            if (!editNickRes.ok)
+                console.error(await editNickRes.text());
 
             // send confirmation message (use comments to send ephemerally using prior interaction token)
             const sendMsgRes = await fetch(
@@ -215,7 +229,7 @@ export default {
                         }, {
                             type: 18,  // label
                             label: "What is your full name?",
-                            description: "You may enter a preferred name",
+                            description: "This will display as your server nickname. Preferred names OK",
                             component: {
                                 type: 4,  // text input
                                 custom_id: "name",
@@ -294,7 +308,7 @@ export default {
                 });
                 if (error) {
                     console.log({ data, error });
-                    // send a message indicating send failure (this does handle bounced emails)
+                    // send a message indicating send failure (this does NOT handle bounced emails)
                     return new Response(
                         JSON.stringify({
                             type: 4,  // channel message

@@ -11,7 +11,7 @@ import 'dotenv/config';
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            content: `Welcome to Husky Cycling – we're glad you're here! This community is open to UW students, staff, and alumni. **To access the discussion channels, please verify your identity using one of the options below**:\n- **If you have a current UW NetID**, select *Verify with NetID* and enter your NetID and name in the pop-up. You will receive an email with a verification link to complete your automatic verification.\n- If you do not have a current NetID, select *Contact Us* to send us an email so we can manually verify you.`,
+            content: `Welcome to Husky Cycling – we're glad you're here! This community is open to UW students, staff, and alumni. **To access the discussion channels, please verify your identity using one of the following options**:\n- **If you have a current UW NetID**, select *Verify with NetID* and enter your NetID and name in the pop-up. You will receive an email with a link to complete your automatic verification.\n- If you do not have a current NetID, select *Contact Us* to send us an email so we can manually verify you.`,
             "components": [
                 {
                     "type": 1,  // action row
