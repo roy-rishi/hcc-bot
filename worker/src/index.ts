@@ -27,6 +27,7 @@ export interface Env {
 // endpoints
 const INTERACTIONS_PATH = "/interactions";
 const VERIFY_PATH = "/verify";
+const EMAIL_BOUNCE_PATH = "/email-bounced";
 
 let createJwt = function (payload: {}, expirationMins: number, signingKey: string): string {
     const token = nJwt.create(payload, signingKey);
@@ -64,6 +65,22 @@ export default {
                 headers: corsHeaders,
             });
         }
+
+
+        // # Resend bounced email webhook
+        if (reqUrl.pathname === EMAIL_BOUNCE_PATH && request.method === "POST") {
+            // parse data
+            let bounceData: schema.EmailBounced;
+            try {
+                bounceData = schema.EmailBounced.parse(JSON.parse(reqBodyRaw));
+            } catch (e) {
+                return new Response(`Error: Could not parse request; ${e}`, { status: 400});
+            }
+            console.error(`Email with ID ${bounceData.data.email_id} to address(es) ${bounceData.data.to} bounced. Error: ${bounceData.data.bounce.message}`);
+
+            return new Response(null, { status: 200});
+        }
+
 
 
         // # receive verification JWT and grant permissions
@@ -275,7 +292,20 @@ export default {
                         }
                     }
                 });
-                console.log({ data, error });
+                if (error) {
+                    console.log({ data, error });
+                    // send a message indicating send failure (this does handle bounced emails)
+                    return new Response(
+                        JSON.stringify({
+                            type: 4,  // channel message
+                            data: {
+                                content: `Failed to send link to **${emailAddress}**. Please try again. If this issue persists, contact us.`,
+                                flags: (1 << 6)  // ephemeral
+                            }
+                        }),
+                        { status: 200, headers: discordHeaders }
+                    );
+                }
 
                 return new Response(
                     JSON.stringify({
