@@ -1,6 +1,25 @@
 import * as z from "zod";
 
-// # Resend bounced email object
+// environment types
+export interface Env {
+    // discord
+    DISCORD_CLIENT_ID: string;
+    DISCORD_CLIENT_SECRET: string;
+    DISCORD_BOT_TOKEN: string;
+    DISCORD_GUILD_ID: string;
+    DISCORD_ROLE_ID: string;
+    DISCORD_LOGS_CHANNEL_ID: string;
+    DISCORD_ANNOUNCEMENT_CHANNEL_ID: string;
+    PUBLIC_KEY: string;
+    // resend
+    RESEND_KEY: string;
+    // jwt
+    JWT_KEY: string;
+    // static files
+    ASSETS: Fetcher;
+}
+
+// # resend bounced email
 export const EmailBounced = z.object({
     type: z.literal("email.bounced"),
     data: z.object({

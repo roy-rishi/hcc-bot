@@ -3,45 +3,21 @@ import nacl from "tweetnacl";
 import { Resend } from 'resend';
 import nJwt from 'njwt';
 import * as schema from './schemas';
-import { int } from "zod";
+import {
+    Path,
+    InteractionType,
+    InteractionCallbackType,
+    ComponentType,
+    TextInputStyle,
+    CorsHeaders
+} from "./constants";
 
-
-// environment types
-export interface Env {
-    // discord
-    DISCORD_CLIENT_ID: string;
-    DISCORD_CLIENT_SECRET: string;
-    DISCORD_BOT_TOKEN: string;
-    DISCORD_GUILD_ID: string;
-    DISCORD_ROLE_ID: string;
-    DISCORD_LOGS_CHANNEL_ID: string;
-    DISCORD_ANNOUNCEMENT_CHANNEL_ID: string;
-    PUBLIC_KEY: string;
-    // resend
-    RESEND_KEY: string;
-    // jwt
-    JWT_KEY: string;
-    // static files
-    ASSETS: Fetcher;
-}
-
-// endpoints
-const INTERACTIONS_PATH = "/interactions";
-const VERIFY_PATH = "/verify";
-const EMAIL_BOUNCE_PATH = "/email-bounced";
 
 let createJwt = function (payload: {}, expirationMins: number, signingKey: string): string {
     const token = nJwt.create(payload, signingKey);
     token.setExpiration(new Date(Date.now() + (expirationMins * 60 * 1000)));
     return token.compact();
 }
-
-const corsHeaders = {
-    "Access-Control-Allow-Origin": "https://www.huskycyclinguw.com",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Max-Age": "86400",
-};
 
 
 export default {
@@ -59,17 +35,17 @@ export default {
         };
 
 
-        // # handle browser pre-flight CORS check
+        // # browser pre-flight CORS check
         if (request.method === "OPTIONS") {
             return new Response(null, {
                 status: 204,
-                headers: corsHeaders,
+                headers: CorsHeaders,
             });
         }
 
 
         // # Resend bounced email webhook
-        if (reqUrl.pathname === EMAIL_BOUNCE_PATH && request.method === "POST") {
+        if (reqUrl.pathname === Path.EMAIL_BOUNCE && request.method === "POST") {
             // parse data
             let bounceData: schema.EmailBounced;
             try {
@@ -84,7 +60,7 @@ export default {
 
 
         // # receive verification JWT and grant permissions
-        if (reqUrl.pathname === VERIFY_PATH && request.method === "POST") {
+        if (reqUrl.pathname === Path.VERIFY && request.method === "POST") {
             // parse request body for JWT
             let jwtStr: string;
             try {
@@ -92,7 +68,7 @@ export default {
                 jwtStr = reqBody.token;
             } catch (e) {
                 console.error(e);
-                return new Response(`Error: Could not parse request body; ${e}`, { status: 401, headers: corsHeaders });
+                return new Response(`Error: Could not parse request body; ${e}`, { status: 401, headers: CorsHeaders });
             }
 
             // validate JWT
@@ -103,7 +79,7 @@ export default {
                     throw new Error("Invalid JWT");
             } catch (e) {
                 console.error(e);
-                return new Response(`Error: ${e}`, { status: 401, headers: corsHeaders });
+                return new Response(`Error: ${e}`, { status: 401, headers: CorsHeaders });
             }
 
             // parse JWT payload
@@ -117,7 +93,7 @@ export default {
                 interactionToken = jwtPayload.interactionToken;
             } catch (e) {
                 console.error(e);
-                return new Response(`Error: Could not parse JWT payload; ${e}`, { status: 401, headers: corsHeaders });
+                return new Response(`Error: Could not parse JWT payload; ${e}`, { status: 401, headers: CorsHeaders });
             }
 
             // add Discord role
@@ -132,7 +108,7 @@ export default {
             if (!addRoleRes.ok) {
                 const resStr = await addRoleRes.text();
                 console.error(resStr);
-                return new Response(`Error: Could not add role; ${resStr}`, { status: 400, headers: corsHeaders });
+                return new Response(`Error: Could not add role; ${resStr}`, { status: 400, headers: CorsHeaders });
             }
 
             // edit server nickname
@@ -169,12 +145,12 @@ export default {
 
 
             // return success
-            return new Response(null, { status: 204, headers: corsHeaders });
+            return new Response(null, { status: 204, headers: CorsHeaders });
         }
 
 
         // # Discord interactions endpoint
-        if (reqUrl.pathname === INTERACTIONS_PATH && request.method === "POST") {
+        if (reqUrl.pathname === Path.INTERACTIONS && request.method === "POST") {
             // get request signature
             const signature = request.headers.get("X-Signature-Ed25519");
             const timestamp = request.headers.get("X-Signature-Timestamp");
@@ -201,15 +177,15 @@ export default {
             }
 
             // ## handle ping
-            if (interactionType === 1) {
+            if (interactionType === InteractionType.PING) {
                 return new Response(
-                    JSON.stringify({ type: 1 }),
+                    JSON.stringify({ type: InteractionCallbackType.PONG }),
                     { status: 200, headers: discordHeaders, }
                 );
             }
 
             // ## handle message component (button press)
-            if (interactionType === 3) {
+            if (interactionType === InteractionType.MESSAGE_COMPONENT) {
                 // TODO: check which button was clicked
 
                 // construct modal (popup)
@@ -218,23 +194,23 @@ export default {
                     title: "Verify with UW NetID",
                     components: [
                         {
-                            type: 18,  // label
+                            type: ComponentType.LABEL,
                             label: "What is your NetID?",
                             description: "This is the portion before '@uw.edu' in your email address",
                             component: {
-                                type: 4,  // text input
+                                type: ComponentType.TEXT_INPUT,
                                 custom_id: "netId",
-                                style: 1,  // short
+                                style: TextInputStyle.SHORT,
                                 placeholder: "NetID"
                             }
                         }, {
-                            type: 18,  // label
+                            type: ComponentType.LABEL,
                             label: "What is your full name?",
                             description: "This will display as your server nickname. Preferred names OK",
                             component: {
-                                type: 4,  // text input
+                                type: ComponentType.TEXT_INPUT,
                                 custom_id: "name",
-                                style: 1,  // short
+                                style: TextInputStyle.SHORT,
                                 placeholder: "Dubs II"
                             }
                         }
@@ -244,13 +220,13 @@ export default {
                 // return modal
                 return new Response(
                     JSON.stringify({
-                        type: 9,  // modal
+                        type: InteractionCallbackType.MODAL,
                         data: modalData
                     }), { status: 200, headers: discordHeaders });
             }
 
             // ## handle modal (form) submission
-            if (interactionType === 5) {
+            if (interactionType === InteractionType.MODAL_SUBMIT) {
                 // TODO: check which modal was submitted
 
                 // parse submission
@@ -264,7 +240,7 @@ export default {
 
                 // get submitter's Discord id
                 const discordId = submission.member.user.id;
-                // get token (to identify this interaction and respond later)
+                // get token (to identify this interaction and/or respond later)
                 const interactionToken = submission.token;
 
                 // get form submission values from components array, and validate their existence
@@ -312,7 +288,7 @@ export default {
                     // send a message indicating send failure (this does NOT handle bounced emails)
                     return new Response(
                         JSON.stringify({
-                            type: 4,  // channel message
+                            type: InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE,
                             data: {
                                 content: `Failed to send link to **${emailAddress}**. Please try again. If this issue persists, contact us.`,
                                 flags: (1 << 6)  // ephemeral
@@ -324,7 +300,7 @@ export default {
 
                 return new Response(
                     JSON.stringify({
-                        type: 4,  // channel message
+                        type: InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE,
                         data: {
                             content: `<@${discordId}>, a verification link has been sent to **${emailAddress}**. It will expire in 10 minutes.`,
                             flags: (1 << 6)  // ephemeral
