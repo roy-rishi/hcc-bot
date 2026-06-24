@@ -31,11 +31,23 @@
 	"env": {
 		// development environment overrides
 		"dev": {
-			"routes": [], // do not use custom domain
-			"vars": {
-				"DISCORD_CLIENT_ID": "1512282809627185292"
-			}
+			"routes": [] // do not use custom domain
 		}
+	},
+	// secrets required from .dev.vars or .env
+	"secrets": {
+		"required": [
+			"DISCORD_CLIENT_ID",
+			"DISCORD_CLIENT_SECRET",
+			"DISCORD_BOT_TOKEN",
+			"DISCORD_GUILD_ID",
+			"DISCORD_ROLE_ID",
+			"DISCORD_LOGS_CHANNEL_ID",
+			"DISCORD_ANNOUNCEMENT_CHANNEL_ID",
+			"DISCORD_PUBLIC_KEY",
+			"RESEND_KEY",
+			"JWT_KEY"
+		],
 	},
 	/**
 	 * Smart Placement
@@ -54,9 +66,7 @@
 	 * Note: Use secrets to store sensitive data.
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
 	 */
-	"vars": {
-		"DISCORD_CLIENT_ID": "1512282809627185292"
-	},
+	"vars": {},
 	/**
 	 * Static Assets
 	 * https://developers.cloudflare.com/workers/static-assets/binding/

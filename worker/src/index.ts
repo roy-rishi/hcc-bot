@@ -161,7 +161,7 @@ export default {
             const isVerified = nacl.sign.detached.verify(
                 Buffer.from(timestamp + reqBodyRaw),
                 Buffer.from(signature, "hex"),
-                Buffer.from(env.PUBLIC_KEY, "hex")
+                Buffer.from(env.DISCORD_PUBLIC_KEY!, "hex")
             );
             if (!isVerified)
                 return new Response("Invalid request signature", { status: 401 })
@@ -267,7 +267,7 @@ export default {
                     interactionToken: interactionToken
                 },
                     10,  // 10 min expiration
-                    env.JWT_KEY  // signing key
+                    env.JWT_KEY!  // signing key
                 );
                 verifyUrl.searchParams.append("token", token);
 
