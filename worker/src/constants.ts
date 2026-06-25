@@ -2,7 +2,8 @@
 export enum Path {
     INTERACTIONS = "/interactions",
     VERIFY = "/verify",
-    EMAIL_BOUNCE = "/email-bounced"
+    EMAIL_BOUNCE = "/email-bounced",
+    NOT_FOUND = "/404.html",
 }
 
 // interaction type codes
@@ -39,9 +40,15 @@ export enum TextInputStyle {
 }
 
 // CORS headers to enable Squarespace site to reach worker
-export const CorsHeaders = {
+export const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "https://www.huskycyclinguw.com",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
+};
+
+// headers required on most Discord responses
+export const DISCORD_HEADERS = {
+    "User-Agent": "DiscordBot (https://hcc.rishiroy.com, 1.0.0)",
+    "Content-Type": "application/json",
 };
