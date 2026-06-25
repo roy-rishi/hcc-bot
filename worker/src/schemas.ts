@@ -1,19 +1,6 @@
 import * as z from "zod";
 
 
-// # resend bounced email
-export const EmailBounced = z.object({
-    type: z.literal("email.bounced"),
-    data: z.object({
-        email_id: z.string(),
-        to: z.string().array(),
-        bounce: z.object({
-            message: z.string()
-        })
-    })
-});
-export type EmailBounced = z.infer<typeof EmailBounced>;
-
 // # simple token object
 export const Token = z.object({
     token: z.string()

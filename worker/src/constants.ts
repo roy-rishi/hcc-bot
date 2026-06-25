@@ -2,7 +2,6 @@
 export enum Path {
     INTERACTIONS = "/interactions",
     VERIFY = "/verify",
-    EMAIL_BOUNCE = "/email-bounced",
     NOT_FOUND = "/404.html",
 }
 

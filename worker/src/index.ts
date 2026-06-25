@@ -23,10 +23,6 @@ export default {
         if (reqMethod === "OPTIONS")
             return handlers.preflightCorsCheck();
 
-        // # bounced email webhook
-        if (reqPath === Path.EMAIL_BOUNCE && reqMethod === "POST")
-            return handlers.bouncedEmail(reqBodyRaw);
-
         // # invalid path (404)
         return await handlers.notFound(env);
     },

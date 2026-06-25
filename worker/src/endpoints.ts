@@ -21,19 +21,6 @@ export let preflightCorsCheck = function (): Response {
     });
 }
 
-export let bouncedEmail = function (reqBodyRaw: string): Response {
-    // parse body
-    let bounceData: schema.EmailBounced;
-    try {
-        bounceData = schema.EmailBounced.parse(JSON.parse(reqBodyRaw));
-    } catch (e) {
-        return new Response(`Error: Could not parse request; ${e}`, { status: 400 });
-    }
-    console.error(`Email with ID ${bounceData.data.email_id} to address(es) ${bounceData.data.to} bounced. Error: ${bounceData.data.bounce.message}`);
-
-    return new Response(null, { status: 200 });
-}
-
 export let verification = async function (reqBodyRaw: string): Promise<Response> {
     // parse request body for JWT
     let jwtStr: string;
@@ -41,8 +28,7 @@ export let verification = async function (reqBodyRaw: string): Promise<Response>
         const reqBody = schema.Token.parse(JSON.parse(reqBodyRaw));
         jwtStr = reqBody.token;
     } catch (e) {
-        console.error(e);
-        return new Response(`Error: Could not parse request body; ${e}`, { status: 401, headers: CORS_HEADERS });
+        return helpers.errorResponse(401, "Could not get JWT from request body", { e }, CORS_HEADERS)
     }
 
     // validate JWT
@@ -52,8 +38,7 @@ export let verification = async function (reqBodyRaw: string): Promise<Response>
         if (!verifiedJwt)
             throw new Error("Invalid JWT");
     } catch (e) {
-        console.error(e);
-        return new Response(`Error: ${e}`, { status: 401, headers: CORS_HEADERS });
+        return helpers.errorResponse(401, "Invalid JWT", { e }, CORS_HEADERS);
     }
 
     // parse JWT payload
@@ -66,8 +51,7 @@ export let verification = async function (reqBodyRaw: string): Promise<Response>
         name = jwtPayload.name;
         interactionToken = jwtPayload.interactionToken;
     } catch (e) {
-        console.error(e);
-        return new Response(`Error: Could not parse JWT payload; ${e}`, { status: 401, headers: CORS_HEADERS });
+        return helpers.errorResponse(401, "Could not parse JWT payload", { e }, CORS_HEADERS);
     }
 
     // add Discord role
@@ -80,9 +64,7 @@ export let verification = async function (reqBodyRaw: string): Promise<Response>
         }
     });
     if (!addRoleRes.ok) {
-        const resStr = await addRoleRes.text();
-        console.error(resStr);
-        return new Response(`Error: Could not add role; ${resStr}`, { status: 400, headers: CORS_HEADERS });
+        helpers.errorResponse(500, "Could not add role", JSON.parse(await addRoleRes.text()), CORS_HEADERS);
     }
 
     // edit server nickname
@@ -98,7 +80,7 @@ export let verification = async function (reqBodyRaw: string): Promise<Response>
         })
     });
     if (!editNickRes.ok)
-        console.error(await editNickRes.text());
+        console.error({ error: "Could not edit nickname", info: await editNickRes.text() });
 
     // send confirmation message (use comments to send ephemerally using prior interaction token)
     const sendMsgRes = await fetch(
@@ -115,7 +97,7 @@ export let verification = async function (reqBodyRaw: string): Promise<Response>
         })
     });
     if (!sendMsgRes.ok)
-        console.error(await sendMsgRes.text());
+        console.error({ error: "Could not send confirmation message", info: await sendMsgRes.text() });
 
 
     // return success
@@ -127,7 +109,7 @@ export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: 
     const signature = reqHeaders.get("X-Signature-Ed25519");
     const timestamp = reqHeaders.get("X-Signature-Timestamp");
     if (!signature || !timestamp)
-        return new Response("Missing request signature", { status: 401 });
+        return helpers.errorResponse(401, "Missing request signature", {}, DISCORD_HEADERS);
 
     // verify request signature
     const isVerified = nacl.sign.detached.verify(
@@ -136,7 +118,7 @@ export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: 
         Buffer.from(process.env.DISCORD_PUBLIC_KEY!, "hex")
     );
     if (!isVerified)
-        return new Response("Invalid request signature", { status: 401 });
+        return helpers.errorResponse(401, "Invalid request signature", {}, DISCORD_HEADERS);
 
     // get interaction type code
     let interactionType: number;
@@ -146,21 +128,19 @@ export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: 
         interactionType = body.type;
         guildId = body.guild_id;
     } catch (e) {
-        console.error(e);
-        return new Response(`Error: Could not parse interaction for attribute 'type'; ${e}`, { status: 400 });
+        return helpers.errorResponse(400, "Could not parse interaction type", { e }, DISCORD_HEADERS);
     }
 
     // handle ping
     if (interactionType === InteractionType.PING) {
-        return new Response(
-            JSON.stringify({ type: InteractionCallbackType.PONG }),
+        return new Response(JSON.stringify({ type: InteractionCallbackType.PONG }),
             { status: 200, headers: DISCORD_HEADERS }
         );
     }
 
     // verify request originated from HCC guild
     if (guildId !== process.env.DISCORD_GUILD_ID)
-        return new Response("Invalid request guild_id", { status: 401 });
+        return helpers.errorResponse(401, "Invalid guild_id", {}, DISCORD_HEADERS)
 
     // handle message component (button press)
     if (interactionType === InteractionType.MESSAGE_COMPONENT) {
@@ -289,7 +269,7 @@ export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: 
     }
 
     // disregard other interaction types
-    return new Response("Unhandled", { status: 500, });
+    return helpers.errorResponse(400, "Unsupported interaction type", {}, DISCORD_HEADERS);
 }
 
 export let notFound = async function (env: Env): Promise<Response> {
