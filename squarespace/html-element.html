@@ -1,48 +1,66 @@
 <h2>Verification</h2>
 
+<!-- verification button and label (visible on page load) -->
 <div id="verify">
   <p>Complete your verification below</p>
   <button id="verifyBtn">Verify Now</button>
 </div>
 
+<!-- loading message (visible while awaiting POST) -->
+<div id="loading" hidden>
+  <p>Loading...</p>
+</div>
+
+<!-- success confirmation (initially hidden) -->
 <div id="success" hidden>
   <p>Success! Your verification is complete. You may close this page and return to Discord.</p>
 </div>
 
+<!-- unauthorized failure type message (initially hidden) -->
 <div id="failure-unauthorized" hidden>
   <p>This link has expired or is invalid. Please request a new link.</p>
 </div>
 
+<!-- any other failure type message (initially hidden) -->
 <div id="failure-other" hidden>
   <p>Verification failed. Please try again. If this issue persists, contact us.</p>
 </div>
 
 <script>
-document.getElementById("verifyBtn").addEventListener("click", () => {
-  // get token from URL query parameters
-  const token = new URLSearchParams(window.location.search).get("token");
-  if (!token)
-    return alert("Missing token");
-
-  // POST token to worker for validation
-  fetch("https://hcc.rishiroy.com/verify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token })
-  })
-  .then(res => {
+  document.getElementById("verifyBtn").addEventListener("click", () => {
     // hide verification button & instructions
     document.getElementById("verify").hidden = true;
 
-    // show status message
-    if (res.ok)
-      document.getElementById("success").hidden = false;
-    else if (res.status === 401)
-      document.getElementById("failure-unauthorized").hidden = false;
-    else
-      document.getElementById("failure-other").hidden = false;
+    // get token from URL query parameters
+    const token = new URLSearchParams(window.location.search).get("token");
+    if (!token)
+      return document.getElementById("failure-unauthorized").hidden = false;
+
+    // show loading message
+    document.getElementById("loading").hidden = false;
+
+    // POST token to worker for validation
+    fetch("https://hcc.rishiroy.com/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token })
+    })
+      .then(res => {
+        // hide loading message
+        document.getElementById("loading").hidden = true;
+
+        // show status message
+        if (res.ok)
+          return document.getElementById("success").hidden = false;
+
+        // show unathorized message
+        if (res.status === 401)
+          return document.getElementById("failure-unauthorized").hidden = false;
+
+        // show failure message
+        return document.getElementById("failure-other").hidden = false;
+      });
   });
-});
 </script>
 
 <style>
