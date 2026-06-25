@@ -1,5 +1,20 @@
-<div id="btnContainer">
+<h2>Verification</h2>
+
+<div id="verify">
+  <p>Complete your verification below</p>
   <button id="verifyBtn">Verify Now</button>
+</div>
+
+<div id="success" hidden>
+  <p>Success! Your verification is complete. You may close this page and return to Discord.</p>
+</div>
+
+<div id="failure-unauthorized" hidden>
+  <p>This link has expired or is invalid. Please request a new link.</p>
+</div>
+
+<div id="failure-other" hidden>
+  <p>Verification failed. Please try again. If this issue persists, contact us.</p>
 </div>
 
 <script>
@@ -15,20 +30,36 @@ document.getElementById("verifyBtn").addEventListener("click", () => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token })
   })
-  .then(res => alert(res.ok ? "Success!" : "Failed"));
+  .then(res => {
+    // hide verification button & instructions
+    document.getElementById("verify").hidden = true;
+
+    // show status message
+    if (res.ok)
+      document.getElementById("success").hidden = false;
+    else if (res.status === 401)
+      document.getElementById("failure-unauthorized").hidden = false;
+    else
+      document.getElementById("failure-other").hidden = false;
+  });
 });
 </script>
 
 <style>
-  #verifyBtn {
-    background-color: black;
-    color: white;
-    border: none;
+  button {
+    background-color: #fafafa;
+    color: #222222;
+    border: 1px solid #222222;
     border-radius: 50px;
     padding: 12px 20px 12px 20px;
   }
 
-  #btnContainer {
+  button:hover {
+    background-color: #222222;
+    color: white;
+  }
+
+  div {
     text-align: center;
   }
 </style>
