@@ -34,7 +34,7 @@ export let bouncedEmail = function (reqBodyRaw: string): Response {
     return new Response(null, { status: 200 });
 }
 
-export let verification = async function(reqBodyRaw: string): Promise<Response> {
+export let verification = async function (reqBodyRaw: string): Promise<Response> {
     // parse request body for JWT
     let jwtStr: string;
     try {
@@ -122,7 +122,7 @@ export let verification = async function(reqBodyRaw: string): Promise<Response> 
     return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-export let discordInteraction = async function(reqBodyRaw: string, reqHeaders: Headers): Promise<Response> {
+export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: Headers): Promise<Response> {
     // get request signature
     const signature = reqHeaders.get("X-Signature-Ed25519");
     const timestamp = reqHeaders.get("X-Signature-Timestamp");
@@ -136,13 +136,15 @@ export let discordInteraction = async function(reqBodyRaw: string, reqHeaders: H
         Buffer.from(process.env.DISCORD_PUBLIC_KEY!, "hex")
     );
     if (!isVerified)
-        return new Response("Invalid request signature", { status: 401 })
+        return new Response("Invalid request signature", { status: 401 });
 
     // get interaction type code
     let interactionType: number;
+    let guildId: string;
     try {
         const body = schema.Interaction.parse(JSON.parse(reqBodyRaw));
         interactionType = body.type;
+        guildId = body.guild_id;
     } catch (e) {
         console.error(e);
         return new Response(`Error: Could not parse interaction for attribute 'type'; ${e}`, { status: 400 });
@@ -155,6 +157,10 @@ export let discordInteraction = async function(reqBodyRaw: string, reqHeaders: H
             { status: 200, headers: DISCORD_HEADERS }
         );
     }
+
+    // verify request originated from HCC guild
+    if (guildId !== process.env.DISCORD_GUILD_ID)
+        return new Response("Invalid request guild_id", { status: 401 });
 
     // handle message component (button press)
     if (interactionType === InteractionType.MESSAGE_COMPONENT) {
@@ -286,7 +292,7 @@ export let discordInteraction = async function(reqBodyRaw: string, reqHeaders: H
     return new Response("Unhandled", { status: 500, });
 }
 
-export let notFound = async function(env: Env): Promise<Response> {
+export let notFound = async function (env: Env): Promise<Response> {
     const staticUrl = new URL(Path.NOT_FOUND);
     const staticRes = await env.ASSETS.fetch(staticUrl);
     return new Response(staticRes.body, {
