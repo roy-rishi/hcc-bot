@@ -3,7 +3,7 @@ import * as schema from '../schemas';
 import * as helpers from "../helpers";
 import { CORS_HEADERS, DISCORD_HEADERS } from '../constants';
 
-// validate JWT and parse its payload. throws errors
+// validate JWT and parse its payload
 let validateAndParseJwt = function (rawJwt: string, signingKey: string): [string, string] {
     // validate JWT
     const verifiedJwt = nJwt.verify(rawJwt, signingKey);
@@ -15,6 +15,7 @@ let validateAndParseJwt = function (rawJwt: string, signingKey: string): [string
     return [payload.discordId, payload.name];
 }
 
+// add role to member
 let addRole = async function (memberId: string) {
     const res = await fetch(
         `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${memberId}/roles/${process.env.DISCORD_ROLE_ID}`, {
@@ -28,6 +29,7 @@ let addRole = async function (memberId: string) {
         throw new Error(await res.text());
 }
 
+// edit member nickname
 let editNickname = async function (memberId: string, toName: string) {
     const res = await fetch(
         `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${memberId}`, {
@@ -44,6 +46,7 @@ let editNickname = async function (memberId: string, toName: string) {
         throw new Error(await res.text());
 }
 
+// send a confirmation message
 let sendConfirmMessage = async function (memberId: string) {
     const res = await fetch(
         `https://discord.com/api/v10/channels/${process.env.DISCORD_LOGS_CHANNEL_ID}/messages`, {
@@ -60,6 +63,7 @@ let sendConfirmMessage = async function (memberId: string) {
         throw new Error(await res.text());
 }
 
+// top-level handler for verification endpoint
 export let verification = async function (reqBodyRaw: string): Promise<Response> {
     // parse request body for JWT
     let jwtStr: string;

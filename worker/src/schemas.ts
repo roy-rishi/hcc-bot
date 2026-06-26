@@ -18,7 +18,7 @@ export type JwtPayload = z.infer<typeof JwtPayload>;
 // # generic interaction to be extended based on the valud of the type code
 export const Interaction = z.object({
     type: z.number(),
-    guild_id: z.string()
+    guild_id: z.string().nullable()
 });
 export type Interaction = z.infer<typeof Interaction>;
 
