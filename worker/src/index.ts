@@ -1,6 +1,8 @@
 /* index.ts: Cloudlfare Worker */
-import { Path } from "./constants";
-import * as handlers from "./endpoints";
+import { Path, CORS_HEADERS } from "./constants";
+import { verification } from "./handlers/verification";
+import { discordInteraction } from "./handlers/interactions";
+import { notFound } from './handlers/not-found'
 
 
 export default {
@@ -13,17 +15,17 @@ export default {
 
         // # validate JWT and grant permissions
         if (reqPath === Path.VERIFY && reqMethod === "POST")
-            return await handlers.verification(reqBodyRaw);
+            return await verification(reqBodyRaw);
 
         // # discord interactions endpoint
         if (reqPath === Path.INTERACTIONS && reqMethod === "POST")
-            return await handlers.discordInteraction(reqBodyRaw, request.headers);
+            return await discordInteraction(reqBodyRaw, request.headers);
 
         // # browser pre-flight CORS check
         if (reqMethod === "OPTIONS")
-            return handlers.preflightCorsCheck();
+            return new Response(null, { status: 204, headers: CORS_HEADERS });
 
         // # invalid path (404)
-        return await handlers.notFound(env);
+        return await notFound(request.url, env);
     },
 } satisfies ExportedHandler<Env>;

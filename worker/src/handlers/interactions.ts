@@ -1,108 +1,21 @@
-import { Resend } from 'resend';
-import nJwt from 'njwt';
 import nacl from "tweetnacl";
-import * as schema from './schemas';
-import * as helpers from "./helpers";
+import nJwt from 'njwt';
+import { Resend } from "resend";
+import * as schema from '../schemas';
+import * as helpers from "../helpers";
 import {
-    Path,
-    InteractionType,
-    InteractionCallbackType,
     ComponentType,
-    TextInputStyle,
-    CORS_HEADERS,
-    DISCORD_HEADERS
-} from "./constants";
+    DISCORD_HEADERS,
+    InteractionCallbackType,
+    InteractionType,
+    TextInputStyle
+} from '../constants';
 
-
-export let preflightCorsCheck = function (): Response {
-    return new Response(null, {
-        status: 204,
-        headers: CORS_HEADERS,
-    });
-}
-
-export let verification = async function (reqBodyRaw: string): Promise<Response> {
-    // parse request body for JWT
-    let jwtStr: string;
-    try {
-        const reqBody = schema.Token.parse(JSON.parse(reqBodyRaw));
-        jwtStr = reqBody.token;
-    } catch (e) {
-        return helpers.errorResponse(401, "Could not get JWT from request body", { e }, CORS_HEADERS)
-    }
-
-    // validate JWT
-    let verifiedJwt: nJwt.Jwt | undefined;
-    try {
-        verifiedJwt = nJwt.verify(jwtStr, process.env.JWT_KEY);
-        if (!verifiedJwt)
-            throw new Error("Invalid JWT");
-    } catch (e) {
-        return helpers.errorResponse(401, "Invalid JWT", { e }, CORS_HEADERS);
-    }
-
-    // parse JWT payload
-    let discordId: string;
-    let name: string;
-    let interactionToken: string;
-    try {
-        const jwtPayload = schema.JwtPayload.parse(verifiedJwt.body);
-        discordId = jwtPayload.discordId;
-        name = jwtPayload.name;
-        interactionToken = jwtPayload.interactionToken;
-    } catch (e) {
-        return helpers.errorResponse(401, "Could not parse JWT payload", { e }, CORS_HEADERS);
-    }
-
-    // add Discord role
-    const addRoleRes = await fetch(
-        `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${discordId}/roles/${process.env.DISCORD_ROLE_ID}`, {
-        method: "PUT",
-        headers: {
-            "Authorization": `Bot ${process.env.DISCORD_BOT_TOKEN}`,
-            ...DISCORD_HEADERS,
-        }
-    });
-    if (!addRoleRes.ok) {
-        helpers.errorResponse(500, "Could not add role", JSON.parse(await addRoleRes.text()), CORS_HEADERS);
-    }
-
-    // edit server nickname
-    const editNickRes = await fetch(
-        `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${discordId}`, {
-        method: "PATCH",
-        headers: {
-            "Authorization": `Bot ${process.env.DISCORD_BOT_TOKEN}`,
-            ...DISCORD_HEADERS,
-        },
-        body: JSON.stringify({
-            nick: name
-        })
-    });
-    if (!editNickRes.ok)
-        console.error({ error: "Could not edit nickname", info: await editNickRes.text() });
-
-    // send confirmation message (use comments to send ephemerally using prior interaction token)
-    const sendMsgRes = await fetch(
-        `https://discord.com/api/v10/channels/${process.env.DISCORD_LOGS_CHANNEL_ID}/messages`, {
-        // `https://discord.com/api/v10/webhooks/${env.DISCORD_CLIENT_ID}/${interactionToken}`, {
-        method: "POST",
-        headers: {
-            "Authorization": `Bot ${process.env.DISCORD_BOT_TOKEN}`,
-            ...DISCORD_HEADERS,
-        },
-        body: JSON.stringify({
-            content: `You're verified, <@${discordId}>!`,
-            // flags: (1 << 6)  // ephemeral
-        })
-    });
-    if (!sendMsgRes.ok)
-        console.error({ error: "Could not send confirmation message", info: await sendMsgRes.text() });
-
-
-    // return success
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
-}
+let createJwt = function (payload: {}, expirationMins: number, signingKey: string): string {
+    const token = nJwt.create(payload, signingKey);
+    token.setExpiration(new Date(Date.now() + (expirationMins * 60 * 1000)));
+    return token.compact();
+};
 
 export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: Headers): Promise<Response> {
     // get request signature
@@ -219,7 +132,7 @@ export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: 
         // email parameters
         const emailAddress = `${netId}@uw.edu`;
         const verifyUrl = new URL("https://www.huskycyclinguw.com/verify");
-        const token = helpers.createJwt({
+        const token = createJwt({
             name: name,
             discordId: discordId,
             interactionToken: interactionToken
@@ -270,13 +183,4 @@ export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: 
 
     // disregard other interaction types
     return helpers.errorResponse(400, "Unsupported interaction type", {}, DISCORD_HEADERS);
-}
-
-export let notFound = async function (env: Env): Promise<Response> {
-    const staticUrl = new URL(Path.NOT_FOUND);
-    const staticRes = await env.ASSETS.fetch(staticUrl);
-    return new Response(staticRes.body, {
-        status: 404,
-        headers: { "Content-Type": "text/html; charset=utf-8" }
-    });
 }
