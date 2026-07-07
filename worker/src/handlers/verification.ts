@@ -4,14 +4,12 @@ import * as helpers from "../helpers";
 import { CORS_HEADERS, DISCORD_HEADERS } from '../constants';
 
 // validate JWT and parse its payload
-let validateAndParseJwt = function (rawJwt: string, signingKey: string): [string, string] {
+export let validateAndParseJwt = function (rawJwt: string, signingKey: string): [string, string] {
     // validate JWT
     const verifiedJwt = nJwt.verify(rawJwt, signingKey);
-    if (!verifiedJwt)
-        throw new Error("Invalid JWT");
 
     // parse JWT payload
-    const payload = schema.JwtPayload.parse(verifiedJwt.body);
+    const payload = schema.JwtPayload.parse(verifiedJwt!.body);
     return [payload.discordId, payload.name];
 }
 

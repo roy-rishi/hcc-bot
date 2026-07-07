@@ -11,7 +11,7 @@ export default {
         const reqPath = (new URL(request.url)).pathname;
         const reqMethod = request.method;
         const reqBodyRaw = await request.text();
-        console.log(reqBodyRaw);
+        console.log({ reqBody: reqBodyRaw });
 
         // # validate JWT and grant permissions
         if (reqPath === Path.VERIFY && reqMethod === "POST")
