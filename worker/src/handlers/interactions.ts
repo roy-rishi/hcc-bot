@@ -1,8 +1,8 @@
 import nacl from "tweetnacl";
-import nJwt from 'njwt';
 import { Resend } from "resend";
 import * as schema from '../schemas';
 import * as helpers from "../helpers";
+import { createJwt } from "../jwt";
 import {
     ComponentType,
     DISCORD_HEADERS,
@@ -11,12 +11,6 @@ import {
     TextInputStyle
 } from '../constants';
 
-// create a JWT string with payload, signed by signingKey, and expiring in expirationMins
-let createJwt = function (payload: {}, expirationMins: number, signingKey: string): string {
-    const token = nJwt.create(payload, signingKey);
-    token.setExpiration(new Date(Date.now() + (expirationMins * 60 * 1000)));
-    return token.compact();
-};
 
 // parse request headers to verify request originated from discord
 let validateDiscordSignature = function (reqHeaders: Headers, reqBody: string) {
@@ -98,7 +92,7 @@ let getSubmmissionValues = function (submission: schema.ModalSubmissionInteracti
 // send an email with a verification link containing a JWT
 let sendVerificationEmail = async function (emailAddress: string, discordId: string, name: string, interactionToken: string) {
     // create JWT with payload
-    const token = createJwt({
+    const token = await createJwt({
         name: name,
         discordId: discordId,
         interactionToken: interactionToken

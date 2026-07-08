@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "dotenv": "^17.4.2",
-    "njwt": "^2.0.1",
+    "jose": "^6.2.3",
     "resend": "^6.14.0",
     "tweetnacl": "^1.0.3",
     "zod": "^4.4.3"
