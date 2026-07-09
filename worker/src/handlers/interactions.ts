@@ -104,21 +104,21 @@ export let getSubmmissionValues = function (submission: schema.ModalSubmissionIn
 }
 
 // send an email with a verification link containing a JWT
-let sendVerificationEmail = async function (emailAddress: string, discordId: string, name: string, interactionToken: string) {
+let sendVerificationEmail = async function (emailAddress: string, discordId: string, name: string, interactionToken: string, jwtKey: string, resendKey: string) {
     // create JWT with payload and 10 minute expiration
     const payload: schema.JwtPayload = {
         name: name,
         discordId: discordId,
         interactionToken: interactionToken
     }
-    const token = await createJwt(payload, 10, process.env.JWT_KEY!);
+    const token = await createJwt(payload, 10, jwtKey);
 
     // create verification URL
     const verifyUrl = new URL("https://www.huskycyclinguw.com/verify");
     verifyUrl.searchParams.append("token", token);
 
     // send email
-    const resend = new Resend(process.env.RESEND_KEY);
+    const resend = new Resend(resendKey);
     const { data, error } = await resend.emails.send({
         to: emailAddress,
         template: {
@@ -134,7 +134,7 @@ let sendVerificationEmail = async function (emailAddress: string, discordId: str
         throw new Error(error.message);
 }
 
-let modalSubmissionHandler = async function (reqBodyRaw: string): Promise<Response> {
+let modalSubmissionHandler = async function (reqBodyRaw: string, env: Required<Env>): Promise<Response> {
     // parse submission
     let submission: schema.ModalSubmissionInteraction;
     try {
@@ -158,7 +158,7 @@ let modalSubmissionHandler = async function (reqBodyRaw: string): Promise<Respon
     const emailAddress = `${netId}@uw.edu`;
     let sendSuccessful = true;
     try {
-        await sendVerificationEmail(emailAddress, discordId, name, interactionToken)
+        await sendVerificationEmail(emailAddress, discordId, name, interactionToken, env.JWT_KEY, env.RESEND_KEY)
     } catch (e) {
         console.error({ e });
         sendSuccessful = false;
@@ -179,18 +179,18 @@ let modalSubmissionHandler = async function (reqBodyRaw: string): Promise<Respon
 }
 
 // top-level handler for discord interactions endpoint
-export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: Headers): Promise<Response> {
+export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: Headers, env: Required<Env>): Promise<Response> {
     // verify request originated from discord
     try {
         const { signature, timestamp } = getDiscordSignature(reqHeaders);
-        validateDiscordSignature(signature, timestamp, reqBodyRaw, process.env.DISCORD_PUBLIC_KEY!);
+        validateDiscordSignature(signature, timestamp, reqBodyRaw, env.DISCORD_PUBLIC_KEY);
     } catch (e) {
         return helpers.errorResponse(401, "Failed to validate request signature", { e }, DISCORD_HEADERS);
     }
 
     // get data to identify interaction
     let interactionType: number;
-    let guildId: string | null;
+    let guildId: string | undefined;
     try {
         const body = schema.Interaction.parse(JSON.parse(reqBodyRaw));
         interactionType = body.type;
@@ -204,7 +204,7 @@ export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: 
         return handlePing();
 
     // reject other interaction types if request does not originate from HCC server
-    if (guildId !== process.env.DISCORD_GUILD_ID)
+    if (guildId !== env.DISCORD_GUILD_ID)
         return helpers.errorResponse(401, "Invalid or missing origin guild_id", {}, DISCORD_HEADERS)
 
     // handle message component
@@ -213,7 +213,7 @@ export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: 
 
     // handle modal (form) submission
     if (interactionType === InteractionType.MODAL_SUBMIT)
-        return await modalSubmissionHandler(reqBodyRaw);
+        return await modalSubmissionHandler(reqBodyRaw, env);
 
     // disregard other interaction types
     return helpers.errorResponse(400, "Unsupported interaction type", {}, DISCORD_HEADERS);

@@ -6,7 +6,7 @@ import { addRole, editNickname, sendConfirmMessage } from '../discord'
 
 
 // top-level handler for verification endpoint
-export let verification = async function (reqBodyRaw: string): Promise<Response> {
+export let verification = async function (reqBodyRaw: string, env: Required<Env>): Promise<Response> {
     // parse request body for JWT
     let jwt: string;
     try {
@@ -18,7 +18,7 @@ export let verification = async function (reqBodyRaw: string): Promise<Response>
     // validate JWT and parse payload
     let jwtPayload: schema.JwtPayload;
     try {
-        jwtPayload = await validateAndParseJwt(jwt, process.env.JWT_KEY!);
+        jwtPayload = await validateAndParseJwt(jwt, env.JWT_KEY);
     } catch (e) {
         return helpers.errorResponse(401, "Failed to validate and parse JWT", { e }, CORS_HEADERS);
     }
@@ -27,15 +27,15 @@ export let verification = async function (reqBodyRaw: string): Promise<Response>
 
     // add discord role
     try {
-        await addRole(discordId);
+        await addRole(env.DISCORD_ROLE_ID, discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN);
     } catch (e) {
         return helpers.errorResponse(500, "Failed to add Discord role", { e }, CORS_HEADERS);
     }
 
     // concurrently edit nickname and send confirmation message
     const [nicknameRes, messageRes] = await Promise.allSettled([
-        editNickname(discordId, name),
-        sendConfirmMessage(discordId)
+        editNickname(name, discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN),
+        sendConfirmMessage(discordId, env.DISCORD_LOGS_CHANNEL_ID, env.DISCORD_BOT_TOKEN)
     ]);
     if (nicknameRes.status === "rejected")
         console.error({ error: "Failed to edit nickname", info: nicknameRes.reason });

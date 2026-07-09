@@ -1,3 +1,18 @@
+// required environment variables
+export const REQUIRED_ENV_KEYS: (keyof Env)[] = [
+    "DISCORD_CLIENT_ID",
+    "DISCORD_CLIENT_SECRET",
+    "DISCORD_BOT_TOKEN",
+    "DISCORD_GUILD_ID",
+    "DISCORD_ROLE_ID",
+    "DISCORD_LOGS_CHANNEL_ID",
+    "DISCORD_ANNOUNCEMENT_CHANNEL_ID",
+    "DISCORD_PUBLIC_KEY",
+    "RESEND_KEY",
+    "JWT_KEY",
+    // ASSETS is a binding, not a secret
+];
+
 // worker paths
 export enum Path {
     INTERACTIONS = "/interactions",

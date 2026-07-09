@@ -2,12 +2,12 @@ import { DISCORD_HEADERS } from './constants';
 
 
 // add role to member
-export let addRole = async function (memberId: string) {
+export let addRole = async function (roleId: string, memberId: string, guildId: string, botToken: string) {
     const res = await fetch(
-        `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${memberId}/roles/${process.env.DISCORD_ROLE_ID}`, {
+        `https://discord.com/api/v10/guilds/${guildId}/members/${memberId}/roles/${roleId}`, {
         method: "PUT",
         headers: {
-            "Authorization": `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+            "Authorization": `Bot ${botToken}`,
             ...DISCORD_HEADERS,
         }
     });
@@ -16,16 +16,16 @@ export let addRole = async function (memberId: string) {
 }
 
 // edit member nickname
-export let editNickname = async function (memberId: string, toName: string) {
+export let editNickname = async function (newName: string, memberId: string, guildId: string, botToken: string) {
     const res = await fetch(
-        `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${memberId}`, {
+        `https://discord.com/api/v10/guilds/${guildId}/members/${memberId}`, {
         method: "PATCH",
         headers: {
-            "Authorization": `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+            "Authorization": `Bot ${botToken}`,
             ...DISCORD_HEADERS,
         },
         body: JSON.stringify({
-            nick: toName
+            nick: newName
         })
     });
     if (!res.ok)
@@ -33,12 +33,12 @@ export let editNickname = async function (memberId: string, toName: string) {
 }
 
 // send a confirmation message
-export let sendConfirmMessage = async function (memberId: string) {
+export let sendConfirmMessage = async function (memberId: string, logsChannelId: string, botToken: string) {
     const res = await fetch(
-        `https://discord.com/api/v10/channels/${process.env.DISCORD_LOGS_CHANNEL_ID}/messages`, {
+        `https://discord.com/api/v10/channels/${logsChannelId}/messages`, {
         method: "POST",
         headers: {
-            "Authorization": `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+            "Authorization": `Bot ${botToken}`,
             ...DISCORD_HEADERS,
         },
         body: JSON.stringify({
