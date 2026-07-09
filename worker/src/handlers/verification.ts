@@ -8,28 +8,28 @@ import { addRole, editNickname, sendConfirmMessage } from '../discord'
 // top-level handler for verification endpoint
 export let verification = async function (reqBodyRaw: string): Promise<Response> {
     // parse request body for JWT
-    let jwtStr: string;
+    let jwt: string;
     try {
-        jwtStr = schema.Token.parse(JSON.parse(reqBodyRaw)).token;
+        jwt = schema.Token.parse(JSON.parse(reqBodyRaw)).token;
     } catch (e) {
-        return helpers.errorResponse(401, "Could not parse req body for JWT", { e }, CORS_HEADERS)
+        return helpers.errorResponse(401, "Failed to parse request body for JWT", { e }, CORS_HEADERS)
     }
 
     // validate JWT and parse payload
-    let payload: schema.JwtPayload;
+    let jwtPayload: schema.JwtPayload;
     try {
-        payload = await validateAndParseJwt(jwtStr, process.env.JWT_KEY!);
+        jwtPayload = await validateAndParseJwt(jwt, process.env.JWT_KEY!);
     } catch (e) {
-        return helpers.errorResponse(401, "Invalid JWT", { e }, CORS_HEADERS);
+        return helpers.errorResponse(401, "Failed to validate and parse JWT", { e }, CORS_HEADERS);
     }
-    const discordId = payload.discordId;
-    const name = payload.name;
+    const discordId = jwtPayload.discordId;
+    const name = jwtPayload.name;
 
     // add discord role
     try {
         await addRole(discordId);
     } catch (e) {
-        return helpers.errorResponse(500, "Could not add role", { e }, CORS_HEADERS);
+        return helpers.errorResponse(500, "Failed to add Discord role", { e }, CORS_HEADERS);
     }
 
     // concurrently edit nickname and send confirmation message
@@ -38,9 +38,9 @@ export let verification = async function (reqBodyRaw: string): Promise<Response>
         sendConfirmMessage(discordId)
     ]);
     if (nicknameRes.status === "rejected")
-        console.error({ error: "Could not edit nickname", info: nicknameRes.reason });
+        console.error({ error: "Failed to edit nickname", info: nicknameRes.reason });
     if (messageRes.status === "rejected")
-        console.error({ error: "Could not send confirmation message", info: messageRes.reason });
+        console.error({ error: "Failed to send confirmation message", info: messageRes.reason });
 
     // return success
     return new Response(null, { status: 204, headers: CORS_HEADERS });

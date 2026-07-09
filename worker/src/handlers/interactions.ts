@@ -12,26 +12,39 @@ import {
 } from '../constants';
 
 
-// parse request headers to verify request originated from discord
-let validateDiscordSignature = function (reqHeaders: Headers, reqBody: string) {
-    // parse headers for request signature
-    const signature = reqHeaders.get("X-Signature-Ed25519");
-    const timestamp = reqHeaders.get("X-Signature-Timestamp");
-    if (!signature || !timestamp)
-        throw new Error("Missing request signature");
+// parse request headers for discord signature
+let getDiscordSignature = function (headers: Headers): { signature: string, timestamp: string } {
+    const signature = headers.get("X-Signature-Ed25519");
+    const timestamp = headers.get("X-Signature-Timestamp");
 
-    // verify request signature
+    if (!signature || !timestamp)
+        throw new Error("Missing/incomplete request signature");
+
+    return { signature, timestamp };
+}
+
+// use request signature to verify request originated from discord and has not been tampered with
+let validateDiscordSignature = function (signature: string, timestamp: string, reqBody: string, publicKey: string) {
     const isVerified = nacl.sign.detached.verify(
         Buffer.from(timestamp + reqBody),
         Buffer.from(signature, "hex"),
-        Buffer.from(process.env.DISCORD_PUBLIC_KEY!, "hex")
+        Buffer.from(publicKey, "hex")
     );
     if (!isVerified)
-        throw new Error("Invalid request signature");
+        throw new Error("Failed to verify request origin");
 }
 
-// construct modal (form popup)
-let createModal = function (): {} {
+let handlePing = function (): Response {
+    return new Response(JSON.stringify({
+        type: InteractionCallbackType.PONG
+    }), {
+        status: 200,
+        headers: DISCORD_HEADERS
+    });
+}
+
+// create a response containing a modal (form) to display
+let respondWithModal = function (): Response {
     const modalData = {
         custom_id: "netIdModal",
         title: "Verify with UW NetID",
@@ -60,14 +73,16 @@ let createModal = function (): {} {
         ]
     };
 
-    return {
+    const modal = {
         type: InteractionCallbackType.MODAL,
         data: modalData
     }
+
+    return new Response(JSON.stringify(modal), { status: 200, headers: DISCORD_HEADERS });
 }
 
 // parse components array for form submission values
-let getSubmmissionValues = function (submission: schema.ModalSubmissionInteraction): [string, string] {
+export let getSubmmissionValues = function (submission: schema.ModalSubmissionInteraction): { netId: string, name: string } {
     let netId: string | undefined;
     let name: string | undefined;
 
@@ -83,23 +98,20 @@ let getSubmmissionValues = function (submission: schema.ModalSubmissionInteracti
 
     // verify both values were found
     if (!netId || !name)
-        throw new Error("Missing modal form values");
-    console.log({ submissionFrom: { netId, name } });
+        throw new Error("Missing modal form value(s)");
 
-    return [netId, name];
+    return { netId, name };
 }
 
 // send an email with a verification link containing a JWT
 let sendVerificationEmail = async function (emailAddress: string, discordId: string, name: string, interactionToken: string) {
-    // create JWT with payload
-    const token = await createJwt({
+    // create JWT with payload and 10 minute expiration
+    const payload: schema.JwtPayload = {
         name: name,
         discordId: discordId,
         interactionToken: interactionToken
-    },
-        10,  // 10 min expiration
-        process.env.JWT_KEY!  // signing key
-    );
+    }
+    const token = await createJwt(payload, 10, process.env.JWT_KEY!);
 
     // create verification URL
     const verifyUrl = new URL("https://www.huskycyclinguw.com/verify");
@@ -122,13 +134,58 @@ let sendVerificationEmail = async function (emailAddress: string, discordId: str
         throw new Error(error.message);
 }
 
+let modalSubmissionHandler = async function (reqBodyRaw: string): Promise<Response> {
+    // parse submission
+    let submission: schema.ModalSubmissionInteraction;
+    try {
+        submission = schema.ModalSubmissionInteraction.parse(JSON.parse(reqBodyRaw));
+    } catch (e) {
+        return helpers.errorResponse(400, "Failed to parse modal submission", { e }, DISCORD_HEADERS);
+    }
+
+    const discordId = submission.member.user.id;
+    const interactionToken = submission.token;
+
+    // get form submission values from components array
+    let netId: string, name: string;
+    try {
+        ({ netId, name } = getSubmmissionValues(submission));
+    } catch (e) {
+        return helpers.errorResponse(400, "Invalid or missing submission values", { e }, DISCORD_HEADERS);
+    }
+
+    // send email
+    const emailAddress = `${netId}@uw.edu`;
+    let sendSuccessful = true;
+    try {
+        await sendVerificationEmail(emailAddress, discordId, name, interactionToken)
+    } catch (e) {
+        console.error({ e });
+        sendSuccessful = false;
+    }
+
+    // message to send (success or failure). does NOT handle bounced emails
+    const message = sendSuccessful ?
+        `<@${discordId}>, a verification link has been sent to **${emailAddress}**. It will expire in 10 minutes.` :
+        `<@${discordId}>: Failed to send link to **${emailAddress}**. Please try again. If this issue persists, contact us.`;
+
+    return new Response(JSON.stringify({
+        type: InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+            content: message,
+            flags: (1 << 6)  // ephemeral
+        }
+    }), { status: 200, headers: DISCORD_HEADERS });
+}
+
 // top-level handler for discord interactions endpoint
 export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: Headers): Promise<Response> {
     // verify request originated from discord
     try {
-        validateDiscordSignature(reqHeaders, reqBodyRaw);
+        const { signature, timestamp } = getDiscordSignature(reqHeaders);
+        validateDiscordSignature(signature, timestamp, reqBodyRaw, process.env.DISCORD_PUBLIC_KEY!);
     } catch (e) {
-        return helpers.errorResponse(401, "Could not validate request signature", { e }, DISCORD_HEADERS);
+        return helpers.errorResponse(401, "Failed to validate request signature", { e }, DISCORD_HEADERS);
     }
 
     // get data to identify interaction
@@ -139,75 +196,24 @@ export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: 
         interactionType = body.type;
         guildId = body.guild_id;
     } catch (e) {
-        return helpers.errorResponse(400, "Could not parse interaction type", { e }, DISCORD_HEADERS);
+        return helpers.errorResponse(400, "Failed to parse interaction type", { e }, DISCORD_HEADERS);
     }
 
     // handle ping
-    if (interactionType === InteractionType.PING) {
-        return new Response(JSON.stringify({
-            type: InteractionCallbackType.PONG
-        }), { status: 200, headers: DISCORD_HEADERS });
-    }
+    if (interactionType === InteractionType.PING)
+        return handlePing();
 
-    // verify request originated from HCC server
+    // reject other interaction types if request does not originate from HCC server
     if (guildId !== process.env.DISCORD_GUILD_ID)
         return helpers.errorResponse(401, "Invalid or missing origin guild_id", {}, DISCORD_HEADERS)
 
-    // handle message component (button press)
-    if (interactionType === InteractionType.MESSAGE_COMPONENT) {
-        // create and return modal (form) to display in response to button
-        const modal = createModal();
-        return new Response(JSON.stringify(modal), {
-            status: 200,
-            headers: DISCORD_HEADERS
-        });
-    }
+    // handle message component
+    if (interactionType === InteractionType.MESSAGE_COMPONENT)
+        return respondWithModal();
 
     // handle modal (form) submission
-    if (interactionType === InteractionType.MODAL_SUBMIT) {
-        // parse submission
-        let submission: schema.ModalSubmissionInteraction;
-        try {
-            submission = schema.ModalSubmissionInteraction.parse(JSON.parse(reqBodyRaw));
-        } catch (e) {
-            return helpers.errorResponse(400, "Could not parse modal submission", { e }, DISCORD_HEADERS);
-        }
-
-        // get submitter's discord id and interaction token (to identify this interaction later)
-        const discordId = submission.member.user.id;
-        const interactionToken = submission.token;
-
-        // get form submission values from components array
-        let netId: string, name: string;
-        try {
-            [netId, name] = getSubmmissionValues(submission);
-        } catch (e) {
-            return helpers.errorResponse(400, "Invalid or missing submission values", { e }, DISCORD_HEADERS);
-        }
-
-        // send email
-        const emailAddress = `${netId}@uw.edu`;
-        let sendSuccessful = true;
-        try {
-            await sendVerificationEmail(emailAddress, discordId, name, interactionToken)
-        } catch (e) {
-            console.error({ e });
-            sendSuccessful = false;
-        }
-
-        // message to send (success or failure). does NOT handle bounced emails
-        const message = sendSuccessful ?
-            `<@${discordId}>, a verification link has been sent to **${emailAddress}**. It will expire in 10 minutes.` :
-            `<@${discordId}>: Failed to send link to **${emailAddress}**. Please try again. If this issue persists, contact us.`;
-
-        return new Response(JSON.stringify({
-            type: InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-                content: message,
-                flags: (1 << 6)  // ephemeral
-            }
-        }), { status: 200, headers: DISCORD_HEADERS });
-    }
+    if (interactionType === InteractionType.MODAL_SUBMIT)
+        return await modalSubmissionHandler(reqBodyRaw);
 
     // disregard other interaction types
     return helpers.errorResponse(400, "Unsupported interaction type", {}, DISCORD_HEADERS);
