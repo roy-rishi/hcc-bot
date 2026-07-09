@@ -22,7 +22,7 @@ describe("integration between jwtCreate and validateAndParseJwt", () => {
     test("valid JWT 1 minute before expiration", async () => {
         const jwt = await createJwt(payload, durationMins, signingKey);
         // 1 minute before expiration
-        vi.setSystemTime(creationDate.getMilliseconds() + ((durationMins - 1) * 60 * 1000));
+        vi.setSystemTime(creationDate.getTime() + ((durationMins - 1) * 60 * 1000));
         const res = await validateAndParseJwt(jwt, signingKey);
         expect(res).toEqual(payload);
     });
