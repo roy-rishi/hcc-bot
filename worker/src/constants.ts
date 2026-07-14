@@ -1,7 +1,5 @@
 // required environment variables
 export const REQUIRED_ENV_KEYS: (keyof Env)[] = [
-    "DISCORD_CLIENT_ID",
-    "DISCORD_CLIENT_SECRET",
     "DISCORD_BOT_TOKEN",
     "DISCORD_GUILD_ID",
     "DISCORD_ROLE_ID",
@@ -10,7 +8,7 @@ export const REQUIRED_ENV_KEYS: (keyof Env)[] = [
     "DISCORD_PUBLIC_KEY",
     "RESEND_KEY",
     "JWT_KEY",
-    // ASSETS is a binding, not a secret
+    // bindings: ASSETS, VERIFY_LIMITER
 ];
 
 // worker paths
