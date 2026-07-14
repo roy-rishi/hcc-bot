@@ -15,6 +15,11 @@ export let verification = async function (reqBodyRaw: string, env: Required<Env>
         return helpers.errorResponse(401, "Failed to parse request body for JWT", { e }, CORS_HEADERS)
     }
 
+    // rate limit this endpoint based on the token
+    const { success } = await env.VERIFY_LIMITER.limit({ key: jwt });
+    if (!success)
+        return helpers.errorResponse(429, "Exceeded rate limits", {}, CORS_HEADERS);
+
     // validate JWT and parse payload
     let jwtPayload: schema.JwtPayload;
     try {

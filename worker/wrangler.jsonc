@@ -7,6 +7,21 @@
 	"name": "hcc",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-06-05",
+	// secrets required in .dev.vars or .env
+	"secrets": {
+		"required": [
+			"DISCORD_CLIENT_ID",
+			"DISCORD_CLIENT_SECRET",
+			"DISCORD_BOT_TOKEN",
+			"DISCORD_GUILD_ID",
+			"DISCORD_ROLE_ID",
+			"DISCORD_LOGS_CHANNEL_ID",
+			"DISCORD_ANNOUNCEMENT_CHANNEL_ID",
+			"DISCORD_PUBLIC_KEY",
+			"RESEND_KEY",
+			"JWT_KEY"
+		],
+	},
 	"observability": {
 		"logs": {
 			"enabled": true,
@@ -32,21 +47,6 @@
 			"routes": [] // do not use custom domain
 		}
 	},
-	// secrets required from .dev.vars or .env
-	"secrets": {
-		"required": [
-			"DISCORD_CLIENT_ID",
-			"DISCORD_CLIENT_SECRET",
-			"DISCORD_BOT_TOKEN",
-			"DISCORD_GUILD_ID",
-			"DISCORD_ROLE_ID",
-			"DISCORD_LOGS_CHANNEL_ID",
-			"DISCORD_ANNOUNCEMENT_CHANNEL_ID",
-			"DISCORD_PUBLIC_KEY",
-			"RESEND_KEY",
-			"JWT_KEY"
-		],
-	},
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
@@ -58,6 +58,17 @@
 	 * databases, object storage, AI inference, real-time communication and more.
 	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
 	 */
+	"ratelimits": [
+		// verify endpoint rate limiting
+		{
+			"name": "VERIFY_LIMITER",
+			"namespace_id": "1001",
+			"simple": {
+				"limit": 3,
+				"period": 60
+			}
+		}
+	],
 	/**
 	 * Environment Variables
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
