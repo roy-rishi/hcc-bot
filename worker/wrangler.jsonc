@@ -62,7 +62,7 @@
 			"name": "VERIFY_LIMITER",
 			"namespace_id": "1001",
 			"simple": {
-				"limit": 3,
+				"limit": 2,
 				"period": 60
 			}
 		}
