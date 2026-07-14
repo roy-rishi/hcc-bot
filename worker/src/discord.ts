@@ -1,4 +1,4 @@
-import { DISCORD_HEADERS } from './constants';
+import { DISCORD_HEADERS, EMOJIS } from './constants';
 
 
 // add role to member
@@ -34,6 +34,11 @@ export let editNickname = async function (newName: string, memberId: string, gui
 
 // send a confirmation message
 export let sendConfirmMessage = async function (memberId: string, logsChannelId: string, botToken: string) {
+    // create confirmation message
+    const randomEmoji: string = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+    const message = `You're verified, <@${memberId}>! ${randomEmoji}`;
+
+    // send the message into the logs channel
     const res = await fetch(
         `https://discord.com/api/v10/channels/${logsChannelId}/messages`, {
         method: "POST",
@@ -42,7 +47,7 @@ export let sendConfirmMessage = async function (memberId: string, logsChannelId:
             ...DISCORD_HEADERS,
         },
         body: JSON.stringify({
-            content: `You're verified, <@${memberId}>!`
+            content: message
         })
     });
     if (!res.ok)

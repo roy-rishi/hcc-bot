@@ -64,3 +64,10 @@ export const DISCORD_HEADERS = {
     "User-Agent": "DiscordBot (https://hcc.rishiroy.com, 1.0.0)",
     "Content-Type": "application/json",
 };
+
+export const EMOJIS: string[] = [
+  "🚴", "🚵", "🚲", "🥇", "🏆", "🎉", "🎊", "👋", "✨", "🌟",
+  "🔥", "🗺️", "🏔️", "☀️", "🌲", "🌳", "🌄", "🌅", "🏞️", "🌤️",
+  "🌦️", "🌿", "🦋", "🌾", "🌊", "⭐", "🪻", "✌️", "👏", "🫍",
+  "🌸", "🌻", "🌺", "🌴", "🌵", "🪄", "🏕️",
+];
