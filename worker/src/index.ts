@@ -24,7 +24,7 @@ export default {
 
             // # discord interactions endpoint
             if (reqPath === Path.INTERACTIONS && reqMethod === "POST")
-                return await discordInteraction(reqBodyRaw, request.headers, env);
+                return await discordInteraction(reqBodyRaw, request.headers, env, ctx);
 
             // # browser pre-flight CORS check
             if (reqMethod === "OPTIONS")

@@ -1,5 +1,6 @@
 // required environment variables
 export const REQUIRED_ENV_KEYS: (keyof Env)[] = [
+    "DISCORD_APPLICATION_ID",
     "DISCORD_BOT_TOKEN",
     "DISCORD_GUILD_ID",
     "DISCORD_ROLE_ID",
@@ -29,6 +30,7 @@ export enum InteractionType {
 export enum InteractionCallbackType {
     PONG = 1,
     CHANNEL_MESSAGE_WITH_SOURCE = 4,
+    DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE = 5,
     MODAL = 9,
 }
 

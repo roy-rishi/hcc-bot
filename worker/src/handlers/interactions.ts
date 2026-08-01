@@ -134,7 +134,19 @@ let sendVerificationEmail = async function (emailAddress: string, discordId: str
         throw new Error(error.message);
 }
 
-let modalSubmissionHandler = async function (reqBodyRaw: string, env: Required<Env>): Promise<Response> {
+// edit the original deferred interaction response
+let editOriginalRes = async function (appId: string, interactionToken: string, content: string) {
+    const res = await fetch(
+        `https://discord.com/api/v10/webhooks/${appId}/${interactionToken}/messages/@original`, {
+        method: "PATCH",
+        headers: DISCORD_HEADERS,
+        body: JSON.stringify({ content })
+    });
+    if (!res.ok)
+        throw new Error(await res.text());
+}
+
+let modalSubmissionHandler = async function (reqBodyRaw: string, env: Required<Env>, ctx: ExecutionContext): Promise<Response> {
     // parse submission
     let submission: schema.ModalSubmissionInteraction;
     try {
@@ -153,33 +165,40 @@ let modalSubmissionHandler = async function (reqBodyRaw: string, env: Required<E
     } catch (e) {
         return helpers.errorResponse(400, "Invalid or missing submission values", { e }, DISCORD_HEADERS);
     }
-
-    // send email
     const emailAddress = `${netId}@uw.edu`;
-    let sendSuccessful = true;
-    try {
-        await sendVerificationEmail(emailAddress, discordId, name, interactionToken, env.JWT_KEY, env.RESEND_KEY)
-    } catch (e) {
-        console.error({ e });
-        sendSuccessful = false;
-    }
 
-    // message to send (success or failure). does NOT handle bounced emails
-    const message = sendSuccessful ?
-        `<@${discordId}>, a verification link has been sent to **${emailAddress}**. It will expire in 10 minutes.` :
-        `<@${discordId}>: Failed to send link to **${emailAddress}**. Please try again. If this issue persists, contact us.`;
+    // run asyncronously, and after responding to the interaction and returning (below)
+    ctx.waitUntil((async () => {
+        // send email
+        let resMessage;
+        try {
+            await sendVerificationEmail(emailAddress, discordId, name, interactionToken, env.JWT_KEY, env.RESEND_KEY)
+            resMessage = `<@${discordId}>, a verification link has been sent to **${emailAddress}**. It will expire in 10 minutes.`;
+        } catch (e) {
+            console.error({ e });
+            resMessage = `<@${discordId}>: Failed to send link to **${emailAddress}**. Please try again. If this issue persists, contact us.`;
+        }
 
+        // edit deferred interaction with a success/failure message
+        try {
+            await editOriginalRes(env.DISCORD_APPLICATION_ID, interactionToken, resMessage);
+        } catch (e) {
+            console.error({ error: "Failed to edit deferred interaction callback", info: e })
+        }
+    })());
+
+    // acknowlege the interaction and defer response
+    // Discord will display a loading state until we call a webhook to follow-up (above)
     return new Response(JSON.stringify({
-        type: InteractionCallbackType.CHANNEL_MESSAGE_WITH_SOURCE,
+        type: InteractionCallbackType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-            content: message,
             flags: (1 << 6)  // ephemeral
         }
     }), { status: 200, headers: DISCORD_HEADERS });
 }
 
 // top-level handler for discord interactions endpoint
-export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: Headers, env: Required<Env>): Promise<Response> {
+export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: Headers, env: Required<Env>, ctx: ExecutionContext): Promise<Response> {
     // verify request originated from discord
     try {
         const { signature, timestamp } = getDiscordSignature(reqHeaders);
@@ -203,7 +222,7 @@ export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: 
     if (interactionType === InteractionType.PING)
         return handlePing();
 
-    // reject other interaction types if request does not originate from HCC server
+    // reject other interaction types if request does not originate from HCC guild
     if (guildId !== env.DISCORD_GUILD_ID)
         return helpers.errorResponse(401, "Invalid or missing origin guild_id", {}, DISCORD_HEADERS)
 
@@ -213,7 +232,7 @@ export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: 
 
     // handle modal (form) submission
     if (interactionType === InteractionType.MODAL_SUBMIT)
-        return await modalSubmissionHandler(reqBodyRaw, env);
+        return await modalSubmissionHandler(reqBodyRaw, env, ctx);
 
     // disregard other interaction types
     return helpers.errorResponse(400, "Unsupported interaction type", {}, DISCORD_HEADERS);
