@@ -19,7 +19,7 @@
 			"DISCORD_PUBLIC_KEY",
 			"RESEND_KEY",
 			"JWT_KEY"
-		],
+		]
 	},
 	"observability": {
 		"logs": {
