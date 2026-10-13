@@ -1,3 +1,6 @@
+// This script sends the verification instructions and
+// action buttons into DISCORD_ANNOUNCEMENT_CHANNEL_ID
+
 import process from 'node:process'
 import { ComponentType, ButtonStyle } from '../src/constants.ts'
 
