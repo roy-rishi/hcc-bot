@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import * as schema from '../schemas';
 import * as helpers from "../helpers";
 import { createJwt } from "../jwt";
+import { getQuizModal } from '../safety-quiz';
 import {
     ComponentType,
     DISCORD_HEADERS,
@@ -43,8 +44,8 @@ let handlePing = function (): Response {
     });
 }
 
-// create a response containing a modal (form) to display
-let respondWithModal = function (): Response {
+// create a response containing an email verification modal
+let netIdModal = function (): Response {
     const modalData = {
         custom_id: "netIdModal",
         title: "Verify with UW NetID",
@@ -227,8 +228,24 @@ export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: 
         return helpers.errorResponse(401, "Invalid or missing origin guild_id", {}, DISCORD_HEADERS)
 
     // handle message component
-    if (interactionType === InteractionType.MESSAGE_COMPONENT)
-        return respondWithModal();
+    if (interactionType === InteractionType.MESSAGE_COMPONENT) {
+        // check which button was pressed
+        let customId: string;
+        try {
+            const body = schema.MsgComponentInteraction.parse(JSON.parse(reqBodyRaw));
+            customId = body.data.custom_id;
+        } catch (e) {
+            return helpers.errorResponse(401, "Missing data->custom_id", {}, DISCORD_HEADERS)
+        }
+
+        // return the appropriate modal
+        if (customId === "startButton")
+            return netIdModal();
+        if (customId === "quizStartButton")
+            return getQuizModal(1);
+        // TODO: grade page submissions and offer next page until complete
+        return helpers.errorResponse(400, "Invalid custom_id", {}, DISCORD_HEADERS);
+    }
 
     // handle modal (form) submission
     if (interactionType === InteractionType.MODAL_SUBMIT)

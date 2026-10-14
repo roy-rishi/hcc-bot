@@ -40,6 +40,8 @@ export enum ComponentType {
     BUTTON = 2,
     TEXT_INPUT = 4,
     LABEL = 18,
+    RADIO_GROUP = 21,
+    TEXT_DISPLAY = 10,
 }
 
 // button style codes
@@ -67,6 +69,7 @@ export const DISCORD_HEADERS = {
     "Content-Type": "application/json",
 };
 
+// emojis that can be randomly appended to certain bot messages
 export const EMOJIS: string[] = [
   "🚴", "🚵", "🚲", "🥇", "🏆", "🎉", "🎊", "👋", "✨", "🌟",
   "🔥", "🗺️", "🏔️", "☀️", "🌲", "🌳", "🌄", "🌅", "🏞️", "🌤️",

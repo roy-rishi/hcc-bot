@@ -1,13 +1,13 @@
 import * as z from "zod";
 
 
-// # simple token object
+// simple token object
 export const Token = z.object({
     token: z.string()
 });
 export type Token = z.infer<typeof Token>;
 
-// # JWT payload
+// JWT payload
 export const JwtPayload = z.object({
     discordId: z.string(),
     name: z.string(),
@@ -15,14 +15,22 @@ export const JwtPayload = z.object({
 });
 export type JwtPayload = z.infer<typeof JwtPayload>;
 
-// # generic interaction to be extended based on the valud of the type code
+// generic interaction to be extended based on the valud of the type code
 export const Interaction = z.object({
     type: z.number(),
     guild_id: z.string().optional()
 });
 export type Interaction = z.infer<typeof Interaction>;
 
-// # specific interaction for modal form submissions
+// message component interaction type
+export const MsgComponentInteraction = Interaction.extend({
+    data: z.object({
+        custom_id: z.string(),
+    }),
+});
+export type MsgComponentInteraction = z.infer<typeof Interaction>;
+
+// specific interaction for modal form submissions
 export const ModalSubmissionInteraction = Interaction.extend({
     token: z.string(),
     member: z.object({
