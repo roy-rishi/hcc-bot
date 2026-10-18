@@ -4,6 +4,7 @@ import * as schema from '../schemas';
 import * as helpers from "../helpers";
 import { createJwt } from "../jwt";
 import { checkAnswer, getQuizModal } from '../safety-quiz';
+import { addRole, getMember } from '../discord';
 import {
     ButtonStyle,
     ComponentType,
@@ -183,13 +184,32 @@ let modalSubmissionHandler = async function (reqBodyRaw: string, env: Required<E
     if (modalId.startsWith("part-")) {  // this is a safety quiz page modal
         // run asyncronously, and after responding to the interaction and returning (below)
         ctx.waitUntil((async () => {
-            if (quizPageCorrect(submission)) {  // page answered correctly, edit deferred interaction
+            if (quizPageCorrect(submission)) {  // page answered correctly
                 // get next page id
                 const nextPageId = parseInt(submission.data.custom_id.split("-")[1]) + 1;
-                if (nextPageId >= 5) {
-                    // quiz complete
+                if (nextPageId >= 5) {  // quiz complete
+                    // add quiz passed role
                     try {
-                        await editOriginalRes(env.DISCORD_APPLICATION_ID, interactionToken, "You've completed the quiz! Once/if you've verified your email, you will have access to the *Recurring Events* channels. We look forward to seeing you at our group rides—stay tuned for our announcements.");
+                        await addRole(env.DISCORD_QUIZ_ROLE_ID, discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN);
+                    } catch (e) {
+                        return helpers.errorResponse(500, "Failed to add Discord role: quiz passed", { e });
+                    }
+
+                    // if the member already has the email verified role, give them the full member role
+                    try {
+                        // get member roles
+                        const roles = (await getMember(discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN)).roles;
+                        if (roles.includes(env.DISCORD_EMAIL_ROLE_ID)) {
+                            // member already verified their email, add full member role
+                            addRole(env.DISCORD_MEMBER_ROLE_ID, discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN);
+                        }
+                    } catch (e) {
+                        return helpers.errorResponse(500, "Failed get Discord roles or to add role: full member", { e });
+                    }
+
+                    // edit deferred response with completion message
+                    try {
+                        await editOriginalRes(env.DISCORD_APPLICATION_ID, interactionToken, "You've completed the quiz! If you haven't already, please verify your email. We look forward to seeing you at our group rides—stay tuned for our announcements.");
                     } catch (e) {
                         console.error({ error: "Failed to edit deferred interaction callback", info: e })
                     }
@@ -219,7 +239,7 @@ let modalSubmissionHandler = async function (reqBodyRaw: string, env: Required<E
                 }
             }
         })());
-    } else {  // this is the verification modal
+    } else {  // this is the email verification modal
         // get form submission values from components array
         let netId: string, name: string;
         try {

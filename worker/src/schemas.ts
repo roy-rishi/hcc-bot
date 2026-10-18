@@ -68,3 +68,9 @@ export const ModalSubmissionInteraction = Interaction.extend({
     }),
 });
 export type ModalSubmissionInteraction = z.infer<typeof ModalSubmissionInteraction>;
+
+export const GuildMember = z.object({
+    roles: z.string().array(),
+    joined_at: z.string(),
+});
+export type GuildMember = z.infer<typeof GuildMember>;
