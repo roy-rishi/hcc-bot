@@ -21,6 +21,8 @@ abstract class Question {
 
     // returns a Discord API–compliant object
     abstract toDiscordObject(index: number): any;
+
+    abstract isCorrect(selection: string | boolean): boolean;
 }
 
 // a single-select (radio) question
@@ -53,37 +55,9 @@ class SingleSelectQuestion extends Question {
             }
         }
     }
-}
 
-// a multi-select (radio) question
-class MultiSelectQuestion extends Question {
-    readonly options: string[];
-    readonly answers: AnswerVal[];
-
-    constructor(label: string, options: string[], answers: AnswerVal[]) {
-        if (options.length < 2 || options.length > 6 || answers.length > options.length)
-            throw new Error("Invalid length of one or more args.");
-
-        super(label);
-        this.options = options;
-        this.answers = answers;
-    }
-
-    toDiscordObject(index: number) {
-        return {
-            type: ComponentType.LABEL,
-            label: this.label,
-            component: {
-                type: ComponentType.CHECKBOX_GROUP,
-                custom_id: `q-${index}`,
-                options: this.options.map((elem, i) => {
-                    return {
-                        "value": answerVals[i],
-                        "label": elem,
-                    };
-                }),
-            }
-        }
+    isCorrect(selection: string): boolean {
+        return selection === this.answer;
     }
 }
 
@@ -102,6 +76,10 @@ class CheckboxQuestion extends Question {
                 custom_id: `q-${index}`,
             }
         }
+    }
+
+    isCorrect(selection: boolean): boolean {
+        return selection;  // ensure that the checkbox is selected
     }
 }
 
@@ -122,7 +100,7 @@ class Page {
 
     toDiscordObject(index: number) {
         return {
-            custom_id: `quiz-${index}`,
+            custom_id: `part-${index}`,
             title: `Safety Quiz — Part ${index + 1}`,
             components: [
                 {
@@ -177,10 +155,10 @@ const quizData: Page[] = [
                 ["Point with one finger upwards", "Hold out one finger to the side", "Wrap right arm around your back & wave to the left", "Point towards the road"],
                 "A",
             ),
-            new MultiSelectQuestion(
-                "The rider(s) in front make a hand signal",
-                ["Repeat the hand signal for riders behind you", "If you can’t remove your hands from the bars, call out the meaning of the signal as a verbal cue"],
-                ["A", "B"],
+            new SingleSelectQuestion(
+                "A rider in front of you makes a hand signal",
+                ["Repeat the hand signal or call out its meaning for riders behind you", "Assume the riders behind you saw it", "Wait until you see why before repeating it for riders behind you"],
+                "A",
             )
         ]
     ),
@@ -212,33 +190,35 @@ const quizData: Page[] = [
     ),
     new Page(
         "Rules of the Road in Washington State",
-        "\n*Refer to these options below*\n A. a white headlight\n B. a red taillight\n C. a red rear-facing reflector",
+        "\n**According to Washington State (WA) law and Husky Cycling Club (HCC) rules, which lights must be installed on your bike when riding in the dark?**\n",
         [
-            new MultiSelectQuestion(
-                "When riding in the dark, you must have…",
-                ["B", "A and B", "A and C", "A, B, and C"],
-                ["C", "D"],
+            new SingleSelectQuestion(
+                "Select the correct option",
+                ["WA requires a headlight and a rear reflector, while HCC requires a headlight and a taillight.", "Both WA and HCC require you to have a taillight, but neither requires a headlight.", "WA requires a headlight and a taillight, while HCC only requires a rear reflector."],
+                "A",
             ),
             new SingleSelectQuestion(
                 "Stop signs…",
                 ["do not require you to come to a complete stop", "do not require you to come to a complete stop IF there is no traffic in the intersection", "always require you to come to a complete stop"],
                 "B",
             ),
-            new MultiSelectQuestion(
+            new SingleSelectQuestion(
                 "Riding on the sidewalk…",
-                ["is permitted anywhere in Washington state", "is only permitted in certain municipalities", "should be done with care to pedestrians’ safety", "is not always safer than riding on the road"],
-                ["B", "C", "D"],
+                ["is permitted anywhere in Washington state", "is only permitted in certain municipalities"],
+                "B",
             ),
         ]
     ),
     new Page(
-        "Agreement",
-        "By selecting the checkbox below, you indicate your agreement to the following clauses:\n- I have read the Safety & Etiquette Policies.\n- I have discussed any concerns that I have regarding these policies with the Officer Team.\n- I understand that the Officer Team reserves the right to restrict my group ride participation should I repeatedly fail to comply with these policies.",
-        [
-            new CheckboxQuestion("I agree"),
-        ]
+        "Attestation",
+        "By selecting *Submit* below, you attest that the following are true:\n- I have read the Safety & Etiquette Policies.\n- I have discussed any concerns that I have regarding these policies with the Officer Team.\n- I understand that the Officer Team reserves the right to restrict my group ride participation should I repeatedly fail to comply with these policies.",
+        []
     )
 ];
+
+export let checkAnswer = function (pageIndex: number, qIndex: number, selection: string | boolean): boolean {
+    return quizData[pageIndex].questions[qIndex].isCorrect(selection);
+}
 
 // create a response containing a safety quiz modal
 export let getQuizModal = function (pageIndex: number): Response {

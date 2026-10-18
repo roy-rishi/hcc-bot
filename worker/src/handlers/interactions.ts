@@ -3,8 +3,9 @@ import { Resend } from "resend";
 import * as schema from '../schemas';
 import * as helpers from "../helpers";
 import { createJwt } from "../jwt";
-import { getQuizModal } from '../safety-quiz';
+import { checkAnswer, getQuizModal } from '../safety-quiz';
 import {
+    ButtonStyle,
     ComponentType,
     DISCORD_HEADERS,
     InteractionCallbackType,
@@ -90,6 +91,8 @@ export let getSubmmissionValues = function (submission: schema.ModalSubmissionIn
     // iterate over list of components
     for (let i = 0; i < submission.data.components.length; i++) {
         const component = submission.data.components[i].component;
+        if (!component || component.type != ComponentType.TEXT_INPUT)
+            continue;
         // assign values based on component id
         if (component.custom_id === "netId")
             netId = component.value.trim();
@@ -136,15 +139,32 @@ let sendVerificationEmail = async function (emailAddress: string, discordId: str
 }
 
 // edit the original deferred interaction response
-let editOriginalRes = async function (appId: string, interactionToken: string, content: string) {
+let editOriginalRes = async function (appId: string, interactionToken: string, content: string, components?: any) {
     const res = await fetch(
         `https://discord.com/api/v10/webhooks/${appId}/${interactionToken}/messages/@original`, {
         method: "PATCH",
         headers: DISCORD_HEADERS,
-        body: JSON.stringify({ content })
+        body: JSON.stringify(!components ? { content } : { content, components }),
     });
     if (!res.ok)
         throw new Error(await res.text());
+}
+
+let quizPageCorrect = function (submission: schema.ModalSubmissionInteraction): boolean {
+    const modalId = submission.data.custom_id;
+    const pageIndex = parseInt(modalId.split("-")[1]);
+
+    for (const question of submission.data.components) {
+        if (!question.component)
+            continue;
+
+        const qIndex = parseInt(question.component.custom_id.split("-")[1]);
+        const isCorrect = checkAnswer(pageIndex, qIndex, question.component.value);
+        if (!isCorrect)
+            return false;
+    }
+
+    return true;
 }
 
 let modalSubmissionHandler = async function (reqBodyRaw: string, env: Required<Env>, ctx: ExecutionContext): Promise<Response> {
@@ -156,37 +176,79 @@ let modalSubmissionHandler = async function (reqBodyRaw: string, env: Required<E
         return helpers.errorResponse(400, "Failed to parse modal submission", { e }, DISCORD_HEADERS);
     }
 
+    const modalId = submission.data.custom_id;
     const discordId = submission.member.user.id;
     const interactionToken = submission.token;
 
-    // get form submission values from components array
-    let netId: string, name: string;
-    try {
-        ({ netId, name } = getSubmmissionValues(submission));
-    } catch (e) {
-        return helpers.errorResponse(400, "Invalid or missing submission values", { e }, DISCORD_HEADERS);
+    if (modalId.startsWith("part-")) {  // this is a safety quiz page modal
+        // run asyncronously, and after responding to the interaction and returning (below)
+        ctx.waitUntil((async () => {
+            if (quizPageCorrect(submission)) {  // page answered correctly, edit deferred interaction
+                // get next page id
+                const nextPageId = parseInt(submission.data.custom_id.split("-")[1]) + 1;
+                if (nextPageId >= 5) {
+                    // quiz complete
+                    try {
+                        await editOriginalRes(env.DISCORD_APPLICATION_ID, interactionToken, "You've completed the quiz! Once/if you've verified your email, you will have access to the *Recurring Events* channels. We look forward to seeing you at our group rides—stay tuned for our announcements.");
+                    } catch (e) {
+                        console.error({ error: "Failed to edit deferred interaction callback", info: e })
+                    }
+                } else {
+                    // move to next part of quiz
+                    const components = [{
+                        type: ComponentType.ACTION_ROW,
+                        components: [{
+                            type: ComponentType.BUTTON,
+                            label: `Start Part ${nextPageId + 1}`,
+                            custom_id: `quiz-${nextPageId}`,
+                            style: ButtonStyle.PRIMARY
+                        }],
+                    }];
+                    try {
+                        await editOriginalRes(env.DISCORD_APPLICATION_ID, interactionToken, `Correct! Continue to Part ${nextPageId + 1}:`, components);
+                    } catch (e) {
+                        console.error({ error: "Failed to edit deferred interaction callback", info: e })
+                    }
+                }
+            } else {
+                // one or more incorrect questions, edit deferred interaction
+                try {
+                    await editOriginalRes(env.DISCORD_APPLICATION_ID, interactionToken, "Sorry, please check your answers and try again.");
+                } catch (e) {
+                    console.error({ error: "Failed to edit deferred interaction callback", info: e })
+                }
+            }
+        })());
+    } else {  // this is the verification modal
+        // get form submission values from components array
+        let netId: string, name: string;
+        try {
+            ({ netId, name } = getSubmmissionValues(submission));
+        } catch (e) {
+            return helpers.errorResponse(400, "Invalid or missing submission values", { e }, DISCORD_HEADERS);
+        }
+        const emailAddress = `${netId}@uw.edu`;
+
+        // run asyncronously, and after responding to the interaction and returning (below)
+        ctx.waitUntil((async () => {
+            // send email
+            let resMessage;
+            try {
+                await sendVerificationEmail(emailAddress, discordId, name, interactionToken, env.JWT_KEY, env.RESEND_KEY)
+                resMessage = `<@${discordId}>, a verification link has been sent to **${emailAddress}**. It will expire in 10 minutes.`;
+            } catch (e) {
+                console.error({ e });
+                resMessage = `<@${discordId}>: Failed to send link to **${emailAddress}**. Please try again. If this issue persists, contact us.`;
+            }
+
+            // edit deferred interaction with a success/failure message
+            try {
+                await editOriginalRes(env.DISCORD_APPLICATION_ID, interactionToken, resMessage);
+            } catch (e) {
+                console.error({ error: "Failed to edit deferred interaction callback", info: e })
+            }
+        })());
     }
-    const emailAddress = `${netId}@uw.edu`;
-
-    // run asyncronously, and after responding to the interaction and returning (below)
-    ctx.waitUntil((async () => {
-        // send email
-        let resMessage;
-        try {
-            await sendVerificationEmail(emailAddress, discordId, name, interactionToken, env.JWT_KEY, env.RESEND_KEY)
-            resMessage = `<@${discordId}>, a verification link has been sent to **${emailAddress}**. It will expire in 10 minutes.`;
-        } catch (e) {
-            console.error({ e });
-            resMessage = `<@${discordId}>: Failed to send link to **${emailAddress}**. Please try again. If this issue persists, contact us.`;
-        }
-
-        // edit deferred interaction with a success/failure message
-        try {
-            await editOriginalRes(env.DISCORD_APPLICATION_ID, interactionToken, resMessage);
-        } catch (e) {
-            console.error({ error: "Failed to edit deferred interaction callback", info: e })
-        }
-    })());
 
     // acknowlege the interaction and defer response
     // Discord will display a loading state until we call a webhook to follow-up (above)
@@ -241,9 +303,10 @@ export let discordInteraction = async function (reqBodyRaw: string, reqHeaders: 
         // return the appropriate modal
         if (customId === "startButton")
             return netIdModal();
-        if (customId === "quizStartButton")
-            return getQuizModal(1);
-        // TODO: grade page submissions and offer next page until complete
+        if (customId.startsWith("quiz-")) {
+            const pageId = parseInt(customId.split("-")[1]);
+            return getQuizModal(pageId);
+        }
         return helpers.errorResponse(400, "Invalid custom_id", {}, DISCORD_HEADERS);
     }
 

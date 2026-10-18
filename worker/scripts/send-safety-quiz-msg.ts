@@ -31,7 +31,7 @@ process.loadEnvFile("../.dev.vars");
                         {
                             "type": ComponentType.BUTTON,
                             "label": "Start Quiz",
-                            "custom_id": "quizStartButton",
+                            "custom_id": "quiz-0",
                             "style": ButtonStyle.PRIMARY
                         }
                     ]
