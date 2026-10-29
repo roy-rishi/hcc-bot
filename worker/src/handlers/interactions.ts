@@ -181,18 +181,29 @@ let modalSubmissionHandler = async function (reqBodyRaw: string, env: Required<E
     const discordId = submission.member.user.id;
     const interactionToken = submission.token;
 
+    // if this is an ephemeral response, we can edit it instead of pushing a new message
+    const messageFlags = submission.message.flags;
+    const isEphemeral = messageFlags && messageFlags & (1 << 6);
+    let callbackType = isEphemeral
+        ? InteractionCallbackType.DEFERRED_UPDATE_MESSAGE
+        : InteractionCallbackType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE;
+
     if (modalId.startsWith("part-")) {  // this is a safety quiz page modal
+        const curPageId = parseInt(submission.data.custom_id.split("-")[1]);
+        const nextPageId = curPageId + 1;
+
         // run asyncronously, and after responding to the interaction and returning (below)
         ctx.waitUntil((async () => {
             if (quizPageCorrect(submission)) {  // page answered correctly
                 // get next page id
-                const nextPageId = parseInt(submission.data.custom_id.split("-")[1]) + 1;
                 if (nextPageId >= 5) {  // quiz complete
                     // add quiz passed role
                     try {
                         await addRole(env.DISCORD_QUIZ_ROLE_ID, discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN);
                     } catch (e) {
-                        return helpers.errorResponse(500, "Failed to add Discord role: quiz passed", { e });
+                        console.error("Failed to add Discord role: quiz passed");
+                        await editOriginalRes(env.DISCORD_APPLICATION_ID, interactionToken, "Sorry, something went wrong. ERRNO: 01. Please contact us.", []);
+                        return;
                     }
 
                     // if the member already has the email verified role, give them the full member role
@@ -201,25 +212,27 @@ let modalSubmissionHandler = async function (reqBodyRaw: string, env: Required<E
                         const roles = (await getMember(discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN)).roles;
                         if (roles.includes(env.DISCORD_EMAIL_ROLE_ID)) {
                             // member already verified their email, add full member role
-                            addRole(env.DISCORD_MEMBER_ROLE_ID, discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN);
+                            await addRole(env.DISCORD_MEMBER_ROLE_ID, discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN);
                         }
                     } catch (e) {
-                        return helpers.errorResponse(500, "Failed get Discord roles or to add role: full member", { e });
+                        console.error("Failed get Discord roles or to add role: full member");
+                        await editOriginalRes(env.DISCORD_APPLICATION_ID, interactionToken, "Sorry, something went wrong. ERRNO: 02. Please contact us.", []);
+                        return;
                     }
 
                     // edit deferred response with completion message
                     try {
-                        await editOriginalRes(env.DISCORD_APPLICATION_ID, interactionToken, "You've completed the quiz! If you haven't already, please verify your email. We look forward to seeing you at our group rides—stay tuned for our announcements.");
+                        await editOriginalRes(env.DISCORD_APPLICATION_ID, interactionToken, "You've completed the quiz! If you haven't already, please verify your email. We look forward to seeing you at our group rides.", []);
                     } catch (e) {
                         console.error({ error: "Failed to edit deferred interaction callback", info: e })
                     }
-                } else {
-                    // move to next part of quiz
+                } else {  // move to next part of quiz
+                    // send success message with button to next part
                     const components = [{
                         type: ComponentType.ACTION_ROW,
                         components: [{
                             type: ComponentType.BUTTON,
-                            label: `Start Part ${nextPageId + 1}`,
+                            label: `Continue`,
                             custom_id: `quiz-${nextPageId}`,
                             style: ButtonStyle.PRIMARY
                         }],
@@ -231,9 +244,18 @@ let modalSubmissionHandler = async function (reqBodyRaw: string, env: Required<E
                     }
                 }
             } else {
-                // one or more incorrect questions, edit deferred interaction
+                // one or more incorrect answers, edit deferred interaction
+                const components = [{
+                    type: ComponentType.ACTION_ROW,
+                    components: [{
+                        type: ComponentType.BUTTON,
+                        label: `Try Again`,
+                        custom_id: `quiz-${curPageId}`,
+                        style: ButtonStyle.PRIMARY
+                    }],
+                }];
                 try {
-                    await editOriginalRes(env.DISCORD_APPLICATION_ID, interactionToken, "Sorry, please check your answers and try again.");
+                    await editOriginalRes(env.DISCORD_APPLICATION_ID, interactionToken, `Sorry, please try part ${curPageId + 1} again:`, components);
                 } catch (e) {
                     console.error({ error: "Failed to edit deferred interaction callback", info: e })
                 }
@@ -273,7 +295,7 @@ let modalSubmissionHandler = async function (reqBodyRaw: string, env: Required<E
     // acknowlege the interaction and defer response
     // Discord will display a loading state until we call a webhook to follow-up (above)
     return new Response(JSON.stringify({
-        type: InteractionCallbackType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+        type: callbackType,
         data: {
             flags: (1 << 6)  // ephemeral
         }

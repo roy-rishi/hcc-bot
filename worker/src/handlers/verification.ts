@@ -32,25 +32,23 @@ export let verification = async function (reqBodyRaw: string, env: Required<Env>
 
     // add email verified role
     try {
-        // TODO: pre-release change
-        // await addRole(env.DISCORD_EMAIL_ROLE_ID, discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN);
-        await addRole(env.DISCORD_MEMBER_ROLE_ID, discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN);
+        await addRole(env.DISCORD_EMAIL_ROLE_ID, discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN);
     } catch (e) {
         return helpers.errorResponse(500, "Failed to add Discord role: verified email", { e });
     }
 
-    // TODO: pre-release change
-    // // if the member already has the quiz passed role, give them the full member role
-    // try {
-    //     // get member roles
-    //     const roles = (await getMember(discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN)).roles;
-    //     if (roles.includes(env.DISCORD_QUIZ_ROLE_ID)) {
-    //         // member already passed quiz, add full member role
-    //         addRole(env.DISCORD_MEMBER_ROLE_ID, discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN);
-    //     }
-    // } catch (e) {
-    //     return helpers.errorResponse(500, "Failed get Discord roles or to add role: full member", { e });
-    // }
+    // if the member already has the quiz passed role, give them the full member role
+    try {
+        // get member roles
+        const roles = (await getMember(discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN)).roles;
+        // TODO: pre-release change
+        // if (roles.includes(env.DISCORD_QUIZ_ROLE_ID)) {
+            // // member already passed quiz, add full member role
+            addRole(env.DISCORD_MEMBER_ROLE_ID, discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN);
+        // }
+    } catch (e) {
+        return helpers.errorResponse(500, "Failed get Discord roles or to add role: full member", { e });
+    }
 
     // concurrently edit nickname and send confirmation message
     const [nicknameRes, messageRes] = await Promise.allSettled([

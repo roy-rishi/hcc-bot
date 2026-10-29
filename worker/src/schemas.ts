@@ -55,6 +55,11 @@ export type TextInputResponse = z.infer<typeof TextInputResponse>;
 // modal submission interaction
 export const ModalSubmissionInteraction = Interaction.extend({
     token: z.string(),
+    message: z.object({
+        id: z.string(),
+        channel_id: z.string(),
+        flags: z.number().optional(),
+    }),
     member: z.object({
         user: z.object({
             id: z.string(),
