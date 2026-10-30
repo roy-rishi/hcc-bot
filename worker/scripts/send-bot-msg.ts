@@ -9,7 +9,7 @@ process.loadEnvFile("../.dev.vars");
 // send message with button
 (async () => {
     const res = await fetch(
-        `https://discord.com/api/v10/channels/${process.env.DISCORD_TEST_CHANNEL_ID}/messages`, {
+        `https://discord.com/api/v10/channels/${process.env.DISCORD_ANNOUNCEMENT_CHANNEL_ID}/messages`, {
         method: "POST",
         headers: {
             "Authorization": `Bot ${process.env.DISCORD_BOT_TOKEN}`,
@@ -18,10 +18,10 @@ process.loadEnvFile("../.dev.vars");
         },
         body: JSON.stringify({
             content: `Welcome to the Husky Cycling Discord server! This community is open to UW students, staff, and alumni. **TO ACCESS THE DISCUSSION CHANNELS**, please complete the following two steps.\n\n` +
-                `**Step 1**: **Verify your identity** using one of the following options:\n` +
+                `**Step 1**: Verify your identity using one of the following options:\n` +
                 `- **If you have a current UW NetID**, select *Verify with NetID* and enter your NetID and name in the pop-up. You will receive an email with a link to complete your automatic verification.\n` +
                 `- If you do not have a current NetID, send an email to \`huskycyclinguw@gmail.com\` so that we can manually verify you.\n\n` +
-                `**Step 2**: Please review our club etiquette and safety policies at the link below. Then, **complete the quiz**. We require that you understand these policies and pass the quiz prior to riding with us.\n\n` +
+                `**Step 2**: Please **review our club etiquette and safety policies** at the link below. Then, **complete the quiz**. We require that you understand these policies and pass the quiz prior to riding with us.\n\n` +
                 `Only after completing both of these steps will you receive full access to our server. You can verify your completion by tapping on your name and looking for the gold Members role on your server profile.`,
             components: [
                 {

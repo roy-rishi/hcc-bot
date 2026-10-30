@@ -41,11 +41,10 @@ export let verification = async function (reqBodyRaw: string, env: Required<Env>
     try {
         // get member roles
         const roles = (await getMember(discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN)).roles;
-        // TODO: pre-release change
-        // if (roles.includes(env.DISCORD_QUIZ_ROLE_ID)) {
-            // // member already passed quiz, add full member role
+        if (roles.includes(env.DISCORD_QUIZ_ROLE_ID)) {
+            // member already passed quiz, add full member role
             addRole(env.DISCORD_MEMBER_ROLE_ID, discordId, env.DISCORD_GUILD_ID, env.DISCORD_BOT_TOKEN);
-        // }
+        }
     } catch (e) {
         return helpers.errorResponse(500, "Failed get Discord roles or to add role: full member", { e });
     }

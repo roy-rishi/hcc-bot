@@ -59,8 +59,7 @@ export let editNickname = async function (newName: string, memberId: string, gui
 export let sendConfirmMessage = async function (memberId: string, logsChannelId: string, botToken: string) {
     // create confirmation message
     const randomEmoji: string = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
-    // TODO: pre-release change
-    const message = `You're verified, <@${memberId}>! ${randomEmoji}`;
+    const message = `Your email is verified, <@${memberId}>! ${randomEmoji} If you haven't, please complete the safety quiz.`;
 
     // send the message into the logs channel
     const res = await fetch(
